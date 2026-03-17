@@ -31,7 +31,7 @@ impl ChatContext {
 #[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct Message {
     pub role: Role,
-    pub content: String,
+    pub content: Option<String>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tool_call_id: Option<String>,
 }
@@ -42,7 +42,7 @@ impl Message {
 
         Self {
             role,
-            content: content.into(),
+            content: Some(content.into()),
             tool_calls: None,
             tool_call_id: None,
         }
@@ -51,7 +51,7 @@ impl Message {
     pub fn new_user(content: impl Into<String>) -> Self {
         Self {
             role: Role::User,
-            content: content.into(),
+            content: Some(content.into()),
             tool_calls: None,
             tool_call_id: None,
         }
@@ -60,7 +60,7 @@ impl Message {
     pub fn new_tool(content: impl Into<String>, id: impl Into<String>) -> Self {
         Self {
             role: Role::Tool,
-            content: content.into(),
+            content: Some(content.into()),
             tool_calls: None,
             tool_call_id: Some(id.into()),
         }

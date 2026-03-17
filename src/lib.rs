@@ -2,10 +2,12 @@ mod api;
 mod context;
 pub mod tools;
 
+use std::fmt::Display;
+
 use crate::{
     api::send_to_ai,
     context::{ChatContext, Message},
-    tools::list_files,
+    tools::{list_files, read_file::ReadFileTool},
 };
 use async_openai::{Client, config::OpenAIConfig};
 use eyre::{Context, Result};
@@ -14,7 +16,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub async fn run(
     mut user_prompt: UnboundedReceiver<String>,
-    response: UnboundedSender<String>,
+    response: UnboundedSender<AgentResponse>,
     system_prompt: impl Into<String>,
     model: impl Into<String>,
     api_base_url: impl Into<String>,
@@ -38,26 +40,34 @@ pub async fn run(
             .await
             .context("Sending to ai")?;
 
-        if !llm_response.content.is_empty() {
+        if let Some(content) = llm_response.content.as_ref() {
             response
-                .send(llm_response.content.clone())
+                .send(AgentResponse {
+                    message: Some(content.to_owned()),
+                    finished: false,
+                })
                 .context("Sending response back to user")?;
         }
 
-        if let Some(tool_calls) = &llm_response.tool_calls {
+        context.add_message(llm_response.clone());
+
+        while let Some(Some(tool_calls)) = context
+            .messages
+            .last()
+            .map(|message| message.tool_calls.clone())
+        {
             for tool_call in tool_calls {
                 let tool_name = tool_call.function.name.as_str();
                 let arguments = &tool_call.function.arguments;
-                let id = &tool_call.id;
+                let id = tool_call.id.clone();
                 let result = match tool_name {
                     list_files::TOOL_NAME => list_files::run_tool(arguments, id),
+                    ReadFileTool::definition() => 
                     _ => Message::new_tool(
                         format!("Error, tool with name {tool_name} doesn't exist."),
                         id,
                     ),
                 };
-
-                dbg!(&result);
 
                 context.add_message(result);
             }
@@ -66,17 +76,36 @@ pub async fn run(
                 .await
                 .context("Sending to ai after running tools")?;
 
-            dbg!(&llm_tool_response);
-
-            if !llm_tool_response.content.is_empty() {
+            if let Some(content) = llm_tool_response.content.as_ref() {
                 response
-                    .send(llm_tool_response.content.clone())
+                    .send(AgentResponse {
+                        message: Some(content.clone()),
+                        finished: false,
+                    })
                     .context("sending ai tool response content to user")?;
             }
+
+            context.add_message(llm_tool_response);
         }
 
-        context.add_message(llm_response);
+        response.send(AgentResponse {
+            message: None,
+            finished: true,
+        })?;
     }
 
     Ok(())
+}
+
+pub struct AgentResponse {
+    pub message: Option<String>,
+    pub finished: bool,
+}
+
+impl Display for AgentResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = self.message.as_deref().unwrap_or_default();
+
+        write!(f, "{message}")
+    }
 }
