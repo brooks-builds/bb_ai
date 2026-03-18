@@ -39,13 +39,16 @@ pub fn run_tool(arguments: &str, id: String) -> Result<Message, Message> {
     };
     let project_root = get_current_directory(id.clone())?;
     let mut content = vec![];
-    let path = match args.path.strip_prefix("/") {
+    let mut path = match args.path.strip_prefix("/") {
         Ok(path) => path,
         Err(error) => {
             eprintln!("{error:?}");
             Path::new(".")
         }
     };
+
+    path = path.strip_prefix("..").unwrap_or(path);
+
     let target_directory = project_root.join(path);
 
     println!("running tool list files at path: {path:?}");

@@ -7,7 +7,6 @@ use std::fmt::Display;
 use crate::{
     api::send_to_ai,
     context::{ChatContext, Message},
-    tools::{list_files, read_file::ReadFileTool},
 };
 use async_openai::{Client, config::OpenAIConfig};
 use eyre::{Context, Result};
@@ -60,13 +59,9 @@ pub async fn run(
                 let tool_name = tool_call.function.name.as_str();
                 let arguments = &tool_call.function.arguments;
                 let id = tool_call.id.clone();
-                let result = match tool_name {
-                    list_files::TOOL_NAME => list_files::run_tool(arguments, id),
-                    ReadFileTool::definition() => 
-                    _ => Message::new_tool(
-                        format!("Error, tool with name {tool_name} doesn't exist."),
-                        id,
-                    ),
+                let result = match tools::run_tools(arguments, id, tool_name) {
+                    Ok(message) => message,
+                    Err(message) => message,
                 };
 
                 context.add_message(result);
