@@ -6,6 +6,8 @@ pub struct ChatContext {
     pub model: String,
     pub messages: Vec<Message>,
     pub tools: Vec<Value>,
+    #[serde(skip)]
+    pub tokens_used: u32,
 }
 
 impl ChatContext {
@@ -20,15 +22,17 @@ impl ChatContext {
             model: model.into(),
             messages,
             tools,
+            tokens_used: 0,
         }
     }
 
-    pub fn add_message(&mut self, message: Message) {
+    pub fn add_message(&mut self, message: Message, tokens: u32) {
         self.messages.push(message);
+        self.tokens_used += tokens;
     }
 
-    pub fn context_length(&self) -> u32 {
-        0
+    pub fn tokens_used(&self) -> u32 {
+        self.tokens_used
     }
 }
 

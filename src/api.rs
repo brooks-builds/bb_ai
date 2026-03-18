@@ -3,7 +3,10 @@ use async_openai::{Client, config::OpenAIConfig};
 use eyre::{Context, Result, bail};
 use serde::Deserialize;
 
-pub async fn send_to_ai(client: &Client<OpenAIConfig>, context: &ChatContext) -> Result<Message> {
+pub async fn send_to_ai(
+    client: &Client<OpenAIConfig>,
+    context: &ChatContext,
+) -> Result<AiResponseMessage> {
     let response: AiResponse = client
         .chat()
         .create_byot(context)
@@ -13,15 +16,29 @@ pub async fn send_to_ai(client: &Client<OpenAIConfig>, context: &ChatContext) ->
         bail!("AI responded without a message");
     };
 
-    Ok(message.message)
+    Ok(AiResponseMessage {
+        message: message.message,
+        tokens: response.usage.total_tokens,
+    })
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AiResponse {
     pub choices: Vec<AiResponseChoice>,
+    pub usage: AiUsage,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct AiResponseChoice {
     pub message: Message,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AiUsage {
+    pub total_tokens: u32,
+}
+
+pub struct AiResponseMessage {
+    pub message: Message,
+    pub tokens: u32,
 }
