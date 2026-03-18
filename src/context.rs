@@ -26,6 +26,10 @@ impl ChatContext {
     pub fn add_message(&mut self, message: Message) {
         self.messages.push(message);
     }
+
+    pub fn context_length(&self) -> u32 {
+        0
+    }
 }
 
 #[derive(Debug, Serialize, Clone, Deserialize)]

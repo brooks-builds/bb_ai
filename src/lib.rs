@@ -21,6 +21,7 @@ pub async fn run(
     api_base_url: impl Into<String>,
     api_key: impl Into<String>,
     tools: Vec<Value>,
+    max_context_length: u32,
 ) -> Result<()> {
     let mut context = ChatContext::new(model, system_prompt, tools);
     let openai_config = OpenAIConfig::new()
@@ -44,6 +45,7 @@ pub async fn run(
                 .send(AgentResponse {
                     message: Some(content.to_owned()),
                     finished: false,
+                    context_length: context.context_length(),
                 })
                 .context("Sending response back to user")?;
         }
@@ -76,6 +78,7 @@ pub async fn run(
                     .send(AgentResponse {
                         message: Some(content.clone()),
                         finished: false,
+                        context_length: context.context_length(),
                     })
                     .context("sending ai tool response content to user")?;
             }
@@ -86,6 +89,7 @@ pub async fn run(
         response.send(AgentResponse {
             message: None,
             finished: true,
+            context_length: context.context_length(),
         })?;
     }
 
@@ -95,6 +99,7 @@ pub async fn run(
 pub struct AgentResponse {
     pub message: Option<String>,
     pub finished: bool,
+    pub context_length: u32,
 }
 
 impl Display for AgentResponse {

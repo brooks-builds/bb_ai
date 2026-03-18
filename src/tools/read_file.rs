@@ -1,7 +1,4 @@
-use crate::{
-    context::Message,
-    tools::{BBTool, utilities},
-};
+use crate::{context::Message, tools::BBTool};
 use colored::Colorize;
 use serde::Deserialize;
 use serde_json::{Value, json};
