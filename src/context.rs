@@ -1,3 +1,4 @@
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -33,6 +34,15 @@ impl ChatContext {
 
     pub fn tokens_used(&self) -> u32 {
         self.tokens_used
+    }
+
+    pub fn reset(&mut self) {
+        println!("{}", "Resetting context".blue());
+
+        let system_prompt = self.messages[0].clone();
+
+        self.messages = vec![system_prompt];
+        self.tokens_used = 0;
     }
 }
 

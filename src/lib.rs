@@ -1,8 +1,10 @@
+pub mod ai_command;
 mod api;
 mod context;
 pub mod tools;
 
 use crate::{
+    ai_command::BBAiCommand,
     api::send_to_ai,
     context::{ChatContext, Message},
 };
@@ -14,7 +16,7 @@ use std::fmt::Display;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub async fn run(
-    mut user_prompt: UnboundedReceiver<String>,
+    mut user_input: UnboundedReceiver<BBAiCommand>,
     response: UnboundedSender<AgentResponse>,
     system_prompt: impl Into<String>,
     model: impl Into<String>,
@@ -29,11 +31,22 @@ pub async fn run(
     let client = Client::with_config(openai_config);
 
     loop {
-        let Some(prompt) = user_prompt.recv().await else {
-            break;
-        };
-
-        context.add_message(Message::new_user(prompt), 0);
+        if let Some(command) = user_input.recv().await {
+            match command {
+                ai_command::BBAiCommand::Prompt(prompt) => {
+                    context.add_message(Message::new_user(prompt), 0);
+                }
+                BBAiCommand::ResetContext => {
+                    context.reset();
+                    response.send(AgentResponse {
+                        message: None,
+                        finished: true,
+                        context_length: context.tokens_used(),
+                    })?;
+                    continue;
+                }
+            }
+        }
 
         let llm_response = send_to_ai(&client, &context)
             .await
@@ -91,8 +104,6 @@ pub async fn run(
             context_length: context.tokens_used(),
         })?;
     }
-
-    Ok(())
 }
 
 pub struct AgentResponse {
