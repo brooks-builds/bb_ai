@@ -33,7 +33,6 @@ We are shifting Code review to the left. That means that the bot will focus on h
 
 ### Backlog
 
-- [ ] Visualize how much the session is costing
 - [ ] Set up 'team' norms
   - [ ] Rules of how we work together
   - [ ] Personality to have
@@ -55,14 +54,14 @@ We are shifting Code review to the left. That means that the bot will focus on h
 
 ### Doing
 
-- [ ] Moved the troll code review to be a workspace member of the bbai library.
-
 ### Done
 
 - [x] Context usage
   - [x] Use a visual percentage bar to show context usage
   - [x] User color with context usage
 - [x] Add command to reset context
+- [x] Moved the troll code review to be a workspace member of the bbai library.
+- [x] Visualize how much the session is costing
 
 ## Polish
 

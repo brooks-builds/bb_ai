@@ -19,6 +19,7 @@ pub async fn send_to_ai(
     Ok(AiResponseMessage {
         message: message.message,
         tokens: response.usage.total_tokens,
+        cost: response.usage.cost,
     })
 }
 
@@ -36,9 +37,11 @@ pub struct AiResponseChoice {
 #[derive(Debug, Deserialize, Clone)]
 pub struct AiUsage {
     pub total_tokens: u32,
+    pub cost: f32,
 }
 
 pub struct AiResponseMessage {
     pub message: Message,
     pub tokens: u32,
+    pub cost: f32,
 }

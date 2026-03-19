@@ -6,6 +6,7 @@ use bb_ai::{
     ai_command::BBAiCommand,
     tools::{BBTool, read_file::ReadFileTool},
 };
+use colored::Colorize;
 use eyre::{Context, Result};
 use std::env;
 use tokio::{spawn, sync::mpsc::unbounded_channel};
@@ -49,10 +50,9 @@ pub async fn run() -> Result<()> {
                     .send(bb_ai::ai_command::BBAiCommand::Prompt(prompt))
                     .context("Sending prompt to agent")?;
             }
-            prompt::Command::ResetContext => {
-                user_prompt_sender
+            prompt::Command::ResetContext => user_prompt_sender
                 .send(BBAiCommand::ResetContext)
-                .context("Resetting context")?},
+                .context("Resetting context")?,
             prompt::Command::Nothing => continue,
         }
 
@@ -67,7 +67,15 @@ pub async fn run() -> Result<()> {
 
             let context_used_bar =
                 bb_ai::context_usage_bar(ai_response.context_length, max_context_length, 10);
-            println!("AI [{context_used_bar}]::{ai_response:#}",);
+            let cost = if ai_response.cost < 0.85 {
+                ai_response.cost.to_string().green()
+            } else if ai_response.cost < 1.0 {
+                ai_response.cost.to_string().yellow()
+            } else {
+                ai_response.cost.to_string().red()
+            };
+
+            println!("AI [{context_used_bar}](${cost})::{ai_response:#}",);
             output::say_outloud(format!("{ai_response}"))
                 .context("Speaking ai response out loud")?;
         }

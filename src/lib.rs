@@ -34,7 +34,7 @@ pub async fn run(
         if let Some(command) = user_input.recv().await {
             match command {
                 ai_command::BBAiCommand::Prompt(prompt) => {
-                    context.add_message(Message::new_user(prompt), 0);
+                    context.add_message(Message::new_user(prompt), 0, 0.0);
                 }
                 BBAiCommand::ResetContext => {
                     context.reset();
@@ -42,6 +42,7 @@ pub async fn run(
                         message: None,
                         finished: true,
                         context_length: context.tokens_used(),
+                        cost: context.cost,
                     })?;
                     continue;
                 }
@@ -58,11 +59,16 @@ pub async fn run(
                     message: Some(content.to_owned()),
                     finished: false,
                     context_length: context.tokens_used(),
+                    cost: context.cost,
                 })
                 .context("Sending response back to user")?;
         }
 
-        context.add_message(llm_response.message.clone(), llm_response.tokens);
+        context.add_message(
+            llm_response.message.clone(),
+            llm_response.tokens,
+            llm_response.cost,
+        );
 
         while let Some(Some(tool_calls)) = context
             .messages
@@ -78,7 +84,7 @@ pub async fn run(
                     Err(message) => message,
                 };
 
-                context.add_message(result, 0);
+                context.add_message(result, 0, 0.0);
             }
 
             let llm_tool_response = send_to_ai(&client, &context)
@@ -91,17 +97,23 @@ pub async fn run(
                         message: Some(content.clone()),
                         finished: false,
                         context_length: context.tokens_used(),
+                        cost: context.cost,
                     })
                     .context("sending ai tool response content to user")?;
             }
 
-            context.add_message(llm_tool_response.message, llm_tool_response.tokens);
+            context.add_message(
+                llm_tool_response.message,
+                llm_tool_response.tokens,
+                llm_tool_response.cost,
+            );
         }
 
         response.send(AgentResponse {
             message: None,
             finished: true,
             context_length: context.tokens_used(),
+            cost: context.cost,
         })?;
     }
 }
@@ -110,6 +122,7 @@ pub struct AgentResponse {
     pub message: Option<String>,
     pub finished: bool,
     pub context_length: u32,
+    pub cost: f32,
 }
 
 impl Display for AgentResponse {

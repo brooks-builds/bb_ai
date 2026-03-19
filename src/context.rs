@@ -9,6 +9,8 @@ pub struct ChatContext {
     pub tools: Vec<Value>,
     #[serde(skip)]
     pub tokens_used: u32,
+    #[serde(skip)]
+    pub cost: f32,
 }
 
 impl ChatContext {
@@ -24,12 +26,14 @@ impl ChatContext {
             messages,
             tools,
             tokens_used: 0,
+            cost: 0.0,
         }
     }
 
-    pub fn add_message(&mut self, message: Message, tokens: u32) {
+    pub fn add_message(&mut self, message: Message, tokens: u32, cost: f32) {
         self.messages.push(message);
         self.tokens_used += tokens;
+        self.cost += cost;
     }
 
     pub fn tokens_used(&self) -> u32 {
