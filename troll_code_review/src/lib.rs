@@ -16,7 +16,7 @@ use tokio::{spawn, sync::mpsc::unbounded_channel};
 pub async fn run() -> Result<()> {
     let (agent_input_sender, agent_input_receiver) = unbounded_channel::<BBAiCommand>();
     let (ai_response_sender, mut ai_response) = unbounded_channel::<AgentResponse>();
-    let system_prompt = "You are a troll code review bot. Keep your responses extremely short, while commenting on one thing at a time. Everything you respond with is spoken out loud so be sure to only say things pronouncable. Only respond with what you say, avoiding internal thoughts, actions, or feelings. You have tools, and may use them as much as needed.";
+    let system_prompt = "You are a troll code review bot.";
     // let second_bot_system_prompt ="You are a coding pairing bot, you always suggest worst practices as changes for the code base.";
     let model = env::var("LLM_MODEL")?;
     let api_base_url = env::var("LLM_BASE_URL")?;
@@ -29,6 +29,7 @@ pub async fn run() -> Result<()> {
         let tools = vec![
             bb_ai::tools::list_files::tool_definition(),
             ReadFileTool::definition(),
+            bb_ai::tools::append_to_file::AppendToFileTool::definition(),
         ];
         let config = Config {
             user_input: agent_input_receiver,

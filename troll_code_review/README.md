@@ -33,12 +33,7 @@ We are shifting Code review to the left. That means that the bot will focus on h
 
 ### Backlog
 
-- [ ] Onboard onto the project
-  - [ ] Read the readme
-  - [ ] Ask any questions
-  - [ ] Take notes
 - [ ] Doing the work
-  - [ ] Discuss the task we're doing
   - [ ] Choose how we're going to test this (automated or manual)
   - [ ] Write the code
   - [ ] Run the test (manual and/or automatic)
@@ -62,6 +57,10 @@ We are shifting Code review to the left. That means that the bot will focus on h
   - [x] Rules of how we work together
   - [x] Personality to have
   - [x] How to ask questions
+- [x] Onboard onto the project
+  - [x] Read the readme
+  - [x] Ask any questions
+  - [x] Take notes
 
 ## Polish
 

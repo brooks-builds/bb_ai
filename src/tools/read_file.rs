@@ -14,6 +14,8 @@ pub const NAME: &str = "read_file";
 pub struct ReadFileTool;
 
 impl BBTool for ReadFileTool {
+    type Arguments = Args;
+
     fn definition() -> Value {
         json!({
           "type": "function",
@@ -86,7 +88,7 @@ impl BBTool for ReadFileTool {
 }
 
 #[derive(Debug, Deserialize)]
-struct Args {
+pub struct Args {
     pub path: PathBuf,
 }
 
