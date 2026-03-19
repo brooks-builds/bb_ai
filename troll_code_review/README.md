@@ -33,10 +33,6 @@ We are shifting Code review to the left. That means that the bot will focus on h
 
 ### Backlog
 
-- [ ] Set up 'team' norms
-  - [ ] Rules of how we work together
-  - [ ] Personality to have
-  - [ ] How to ask questions
 - [ ] Onboard onto the project
   - [ ] Read the readme
   - [ ] Ask any questions
@@ -62,6 +58,10 @@ We are shifting Code review to the left. That means that the bot will focus on h
 - [x] Add command to reset context
 - [x] Moved the troll code review to be a workspace member of the bbai library.
 - [x] Visualize how much the session is costing
+- [x] Set up 'team' norms
+  - [x] Rules of how we work together
+  - [x] Personality to have
+  - [x] How to ask questions
 
 ## Polish
 

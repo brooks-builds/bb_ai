@@ -2,6 +2,8 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::config::Config;
+
 #[derive(Debug, Serialize)]
 pub struct ChatContext {
     pub model: String,
@@ -14,15 +16,17 @@ pub struct ChatContext {
 }
 
 impl ChatContext {
-    pub fn new(
-        model: impl Into<String>,
-        system_prompt: impl Into<String>,
-        tools: Vec<Value>,
-    ) -> Self {
-        let messages = vec![Message::new_system(system_prompt)];
+    pub fn new(config: &Config) -> Self {
+        let model = config.model.clone();
+        let mut messages = vec![Message::new_system(config.system_prompt.clone())];
+        let tools = config.tools.clone();
+
+        if let Some(norms) = config.norms.as_ref().cloned() {
+            messages.push(Message::new_user(norms));
+        }
 
         Self {
-            model: model.into(),
+            model,
             messages,
             tools,
             tokens_used: 0,
@@ -40,13 +44,20 @@ impl ChatContext {
         self.tokens_used
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self, config: &Config) {
         println!("{}", "Resetting context".blue());
 
-        let system_prompt = self.messages[0].clone();
+        let system_prompt = Message::new_system(config.system_prompt.clone());
 
-        self.messages = vec![system_prompt];
+        self.messages.truncate(0);
         self.tokens_used = 0;
+        self.messages.push(system_prompt);
+
+        if let Some(norms) = config.norms.as_ref().cloned() {
+            let message = Message::new_user(norms);
+
+            self.messages.push(message);
+        }
     }
 }
 

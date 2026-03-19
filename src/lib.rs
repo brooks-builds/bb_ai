@@ -1,44 +1,36 @@
 pub mod ai_command;
 mod api;
+pub mod config;
 mod context;
 pub mod tools;
+pub mod utilities;
 
 use crate::{
     ai_command::BBAiCommand,
     api::send_to_ai,
+    config::Config,
     context::{ChatContext, Message},
 };
 use async_openai::{Client, config::OpenAIConfig};
-use colored::Colorize;
 use eyre::{Context, Result};
-use serde_json::Value;
 use std::fmt::Display;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-pub async fn run(
-    mut user_input: UnboundedReceiver<BBAiCommand>,
-    response: UnboundedSender<AgentResponse>,
-    system_prompt: impl Into<String>,
-    model: impl Into<String>,
-    api_base_url: impl Into<String>,
-    api_key: impl Into<String>,
-    tools: Vec<Value>,
-) -> Result<()> {
-    let mut context = ChatContext::new(model, system_prompt, tools);
+pub async fn run(mut config: Config) -> Result<()> {
+    let mut context = ChatContext::new(&config);
     let openai_config = OpenAIConfig::new()
-        .with_api_key(api_key)
-        .with_api_base(api_base_url);
+        .with_api_key(&config.api_key)
+        .with_api_base(&config.api_base_url);
     let client = Client::with_config(openai_config);
 
     loop {
-        if let Some(command) = user_input.recv().await {
+        if let Some(command) = config.user_input.recv().await {
             match command {
                 ai_command::BBAiCommand::Prompt(prompt) => {
                     context.add_message(Message::new_user(prompt), 0, 0.0);
                 }
                 BBAiCommand::ResetContext => {
-                    context.reset();
-                    response.send(AgentResponse {
+                    context.reset(&config);
+                    config.response.send(AgentResponse {
                         message: None,
                         finished: true,
                         context_length: context.tokens_used(),
@@ -54,7 +46,8 @@ pub async fn run(
             .context("Sending to ai")?;
 
         if let Some(content) = llm_response.message.content.as_ref() {
-            response
+            config
+                .response
                 .send(AgentResponse {
                     message: Some(content.to_owned()),
                     finished: false,
@@ -92,7 +85,8 @@ pub async fn run(
                 .context("Sending to ai after running tools")?;
 
             if let Some(content) = llm_tool_response.message.content.as_ref() {
-                response
+                config
+                    .response
                     .send(AgentResponse {
                         message: Some(content.clone()),
                         finished: false,
@@ -109,7 +103,7 @@ pub async fn run(
             );
         }
 
-        response.send(AgentResponse {
+        config.response.send(AgentResponse {
             message: None,
             finished: true,
             context_length: context.tokens_used(),
@@ -130,68 +124,5 @@ impl Display for AgentResponse {
         let message = self.message.as_deref().unwrap_or_default();
 
         write!(f, "{message}")
-    }
-}
-
-pub fn context_usage_bar(
-    tokens_used: u32,
-    max_tokens: u32,
-    bar_length: u32,
-) -> colored::ColoredString {
-    let mut bar = String::new();
-    let progress_char = '=';
-    let token_used_percentage = tokens_used / max_tokens;
-    let mut bar_chars = token_used_percentage * bar_length;
-    let color_change = bar_length / 3;
-    let bars_used = bar_chars;
-
-    while bar_chars > 0 {
-        bar.push(progress_char);
-        bar_chars -= 1
-    }
-
-    bar.push('>');
-
-    for _ in bar.len()..bar_length as usize {
-        bar.push(' ');
-    }
-
-    if bars_used < color_change {
-        bar.green()
-    } else if bars_used > bars_used - color_change {
-        bar.red()
-    } else {
-        bar.yellow()
-    }
-}
-
-mod tests {
-    #[allow(unused_imports)]
-    use super::*;
-
-    #[test]
-    fn contect_usage_bar_shows_percentage_used() {
-        let tokens_used = 500;
-        let max_tokens = 200000;
-        let bar_length = 10;
-        let expected = ">         ".to_owned();
-
-        assert_eq!(
-            context_usage_bar(tokens_used, max_tokens, bar_length),
-            expected.green()
-        );
-    }
-
-    #[test]
-    fn contect_usage_bar_shows_green_on_low_context() {
-        let tokens_used = 500;
-        let max_tokens = 200000;
-        let bar_length = 10;
-        let expected = ">         ".to_owned();
-
-        assert_eq!(
-            context_usage_bar(tokens_used, max_tokens, bar_length),
-            expected.green()
-        );
     }
 }
