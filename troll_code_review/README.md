@@ -34,7 +34,6 @@ We are shifting Code review to the left. That means that the bot will focus on h
 ### Backlog
 
 - [ ] Doing the work
-  - [ ] Choose how we're going to test this (automated or manual)
   - [ ] Write the code
   - [ ] Run the test (manual and/or automatic)
   - [ ] Commit to GitHub with a good commit message
@@ -44,6 +43,9 @@ We are shifting Code review to the left. That means that the bot will focus on h
   - [ ] Celebration
 
 ### Doing
+
+- [ ] Choose how we're going to test this (automated or manual)
+- [ ] Automatically send a message to the agent when a file has changed # Not sure if this is working yet.
 
 ### Done
 

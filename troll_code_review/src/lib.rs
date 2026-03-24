@@ -10,7 +10,8 @@ use bb_ai::{
 };
 use colored::Colorize;
 use eyre::{Context, Result};
-use std::env;
+use notify::Watcher;
+use std::{env, path::Path, sync::mpsc::channel};
 use tokio::{spawn, sync::mpsc::unbounded_channel};
 
 pub async fn run() -> Result<()> {
@@ -24,6 +25,17 @@ pub async fn run() -> Result<()> {
         env::var("LLM_API_KEY").context("Loading LLM API KEY from environment variable")?;
     let max_context_length = env::var("LLM_MODEL_CONTEXT")?.parse::<u32>()?;
     let norms = get_norms()?;
+    let (file_change_tx, mut file_change_rx) = channel::<notify::Result<notify::Event>>();
+    let notify_config = notify::Config::default();
+
+    notify_config.with_compare_contents(true);
+
+    let mut file_watcher = notify::PollWatcher::new(file_change_tx, notify_config)
+        .context("setting up file watching")?;
+
+    file_watcher
+        .watch(Path::new("."), notify::RecursiveMode::Recursive)
+        .context("Watching all files recursively.")?;
 
     spawn(async move {
         let tools = vec![
@@ -48,7 +60,7 @@ pub async fn run() -> Result<()> {
     });
 
     loop {
-        match prompt::get_prompt()? {
+        match prompt::get_prompt(&mut file_change_rx)? {
             prompt::Command::Prompt(prompt) => {
                 agent_input_sender
                     .send(bb_ai::ai_command::BBAiCommand::Prompt(prompt))
