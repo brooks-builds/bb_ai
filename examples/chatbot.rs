@@ -1,9 +1,8 @@
-use bb_ai::config::Config;
-use eyre::Result;
-use std::{
-    env,
-    io::{Write, stdin, stdout},
+use bb_ai::{
+    config::Config,
+    utilities::{get_user_prompt::get_user_input, print_response_message::print_ai_response},
 };
+use std::env;
 use tokio::sync::mpsc::unbounded_channel;
 
 #[tokio::main]
@@ -41,26 +40,11 @@ async fn main() -> eyre::Result<()> {
                 continue;
             };
 
-            if let Some(message) = agent_response.message {
-                let cost = agent_response.cost;
-                let context = agent_response.context_length;
-
-                println!("AI (context: {context} ${cost}){message}");
-            }
+            print_ai_response(&agent_response);
 
             if agent_response.finished {
                 break;
             }
         }
     }
-}
-
-fn get_user_input() -> Result<String> {
-    print!("> ");
-    stdout().flush()?;
-
-    let mut prompt = String::new();
-    stdin().read_line(&mut prompt)?;
-
-    Ok(prompt)
 }

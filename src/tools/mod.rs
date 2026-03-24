@@ -1,5 +1,6 @@
 pub mod append_to_file;
 pub mod list_files;
+pub mod random_number;
 pub mod read_file;
 pub mod request_tool;
 pub mod utilities;
@@ -19,6 +20,7 @@ pub fn run_tools(arguments: &str, id: String, name: &str) -> Result<Message, Mes
         list_files::TOOL_NAME => list_files::run_tool(arguments, id),
         read_file::NAME => read_file::ReadFileTool::run(arguments, id),
         append_to_file::NAME => append_to_file::AppendToFileTool::run(arguments, id),
+        random_number::NAME => random_number::RandomNumberTool::run(arguments, id),
         _ => Err(Message::new_tool(
             format!("Error, tool {name} doesn't exist."),
             id,
