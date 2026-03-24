@@ -18,3 +18,6 @@ members = ["troll_code_review"]
 
 [workspace.dependencies]
 colored = "3.1.1"
+
+[dev-dependencies]
+dotenvy = "0.15.7"

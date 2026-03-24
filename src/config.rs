@@ -10,5 +10,4 @@ pub struct Config {
     pub api_base_url: String,
     pub api_key: String,
     pub tools: Vec<Value>,
-    pub norms: Option<String>,
 }

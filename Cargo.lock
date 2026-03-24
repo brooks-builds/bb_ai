@@ -114,6 +114,7 @@ dependencies = [
  "async-openai",
  "color-eyre",
  "colored",
+ "dotenvy",
  "eyre",
  "ignore",
  "serde",

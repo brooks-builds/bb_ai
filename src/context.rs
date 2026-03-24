@@ -18,12 +18,8 @@ pub struct ChatContext {
 impl ChatContext {
     pub fn new(config: &Config) -> Self {
         let model = config.model.clone();
-        let mut messages = vec![Message::new_system(config.system_prompt.clone())];
+        let messages = vec![Message::new_system(config.system_prompt.clone())];
         let tools = config.tools.clone();
-
-        if let Some(norms) = config.norms.as_ref().cloned() {
-            messages.push(Message::new_user(norms));
-        }
 
         Self {
             model,
@@ -52,12 +48,6 @@ impl ChatContext {
         self.messages.truncate(0);
         self.tokens_used = 0;
         self.messages.push(system_prompt);
-
-        if let Some(norms) = config.norms.as_ref().cloned() {
-            let message = Message::new_user(norms);
-
-            self.messages.push(message);
-        }
     }
 }
 

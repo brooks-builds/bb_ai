@@ -6,7 +6,6 @@ use bb_ai::{
     ai_command::BBAiCommand,
     config::Config,
     tools::{BBTool, read_file::ReadFileTool},
-    utilities::get_norms::get_norms,
 };
 use colored::Colorize;
 use eyre::{Context, Result};
@@ -24,7 +23,6 @@ pub async fn run() -> Result<()> {
     let api_key =
         env::var("LLM_API_KEY").context("Loading LLM API KEY from environment variable")?;
     let max_context_length = env::var("LLM_MODEL_CONTEXT")?.parse::<u32>()?;
-    let norms = get_norms()?;
     let (file_change_tx, mut file_change_rx) = channel::<notify::Result<notify::Event>>();
     let notify_config = notify::Config::default();
 
@@ -51,7 +49,6 @@ pub async fn run() -> Result<()> {
             api_base_url,
             api_key,
             tools,
-            norms: Some(norms),
         };
 
         if let Err(error) = bb_ai::run(config).await {

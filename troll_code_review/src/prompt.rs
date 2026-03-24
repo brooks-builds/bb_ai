@@ -1,9 +1,5 @@
 use colored::Colorize;
-use eyre::Context;
-use std::{
-    io::{Write, stdin, stdout},
-    sync::mpsc::Receiver,
-};
+use std::sync::mpsc::Receiver;
 
 pub fn get_prompt(
     file_watcher_rx: &mut Receiver<notify::Result<notify::Event>>,
