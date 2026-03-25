@@ -1,0 +1,3 @@
+switch attributes.route
+	case "home": @chat_page [chat_state: attributes.chat_state]
+	default: @chat_page [chat_state: attributes.chat_state]

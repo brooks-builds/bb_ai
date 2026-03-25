@@ -2,7 +2,7 @@ use std::env;
 
 use bb_ai::{
     config::Config,
-    tools::{BBTool, git_diff::GitDiffTool},
+    tools::{BBTool, git_diff::GitDiffTool, git_status::GitStatusTool, read_file::ReadFileTool},
 };
 use tokio::{spawn, sync::mpsc::unbounded_channel};
 
@@ -16,12 +16,14 @@ async fn main() -> eyre::Result<()> {
     let config = Config {
         user_input: user_input_rx,
         response: agent_response_tx,
-        system_prompt: "You are a senior developer, who specializes in short, brief, correct git commit messages".to_owned(),
+        system_prompt: "You are a senior developer who loves to answer in single sentence responses. You also love puns and emoji to clarify what you are attempting to purvey.".to_owned(),
         model: env::var("LLM_MODEL")?,
         api_base_url: env::var("LLM_BASE_URL")?,
         api_key: env::var("LLM_API_KEY")?,
         tools: vec![
             GitDiffTool::definition(),
+            GitStatusTool::definition(),
+            ReadFileTool::definition(),
         ],
     };
 
@@ -30,7 +32,7 @@ async fn main() -> eyre::Result<()> {
     });
 
     user_input_tx.send(bb_ai::ai_command::BBAiCommand::Prompt(
-        "Generate a git commit message".to_owned(),
+        "Generate a git commit message. Read the files to ensure that you get a proper commit message. Only respond with the message after you've read the diffs and files. Keep your response to 25 words or less.".to_owned(),
     ))?;
 
     loop {

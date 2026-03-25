@@ -1,0 +1,3 @@
+container [min_height: 4]
+	vstack
+		@BBInput (on_enter -> user_input) [label: ">"]

@@ -1,0 +1,6 @@
+vstack
+	for user in state.senders
+		hstack
+			if user == "User"
+				spacer 
+			@message [content: state.contents[loop]]
