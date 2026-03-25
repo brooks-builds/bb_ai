@@ -49,6 +49,12 @@ pub async fn run() -> Result<()> {
             api_base_url,
             api_key,
             tools,
+            user_input_tx: None,
+            response_rx: None,
+            agents: vec![],
+            description:
+                "QA for code, it makes fun of the user way more than helps. Good for streaming."
+                    .to_owned(),
         };
 
         if let Err(error) = bb_ai::run(config).await {

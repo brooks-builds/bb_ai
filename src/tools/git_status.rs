@@ -35,7 +35,7 @@ impl BBTool for GitStatusTool {
           "type": "function",
           "function": {
             "name": NAME,
-            "description": "Run the git status command to get a full list of files that need to be committed. This includes file that are modified (which the git diff command will help see the differences) and new files that havn't been committed yet."
+            "description": "Run the git status command to get a full list of files that need to be committed. This includes file that are modified (which the git diff command will help see the differences) and new files that haven't been committed yet."
           }
         })
     }

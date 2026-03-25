@@ -5,6 +5,7 @@ pub mod list_files;
 pub mod random_number;
 pub mod read_file;
 pub mod request_tool;
+pub mod sub_agent;
 pub mod utilities;
 
 use crate::context::Message;

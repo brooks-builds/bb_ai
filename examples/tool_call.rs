@@ -22,6 +22,10 @@ async fn main() -> eyre::Result<()> {
         api_base_url: env::var("LLM_BASE_URL")?,
         api_key: env::var("LLM_API_KEY")?,
         tools: vec![bb_ai::tools::random_number::RandomNumberTool::definition()],
+        user_input_tx: None,
+        response_rx: None,
+        agents: vec![],
+        description: "A agent that can generate real random numbers via a tool call".to_owned(),
     };
 
     spawn(async move {

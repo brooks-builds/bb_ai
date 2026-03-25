@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::config::Config;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct ChatContext {
     pub model: String,
     pub messages: Vec<Message>,
@@ -40,10 +40,10 @@ impl ChatContext {
         self.tokens_used
     }
 
-    pub fn reset(&mut self, config: &Config) {
+    pub fn reset(&mut self, system_prompt: String) {
         println!("{}", "Resetting context".blue());
 
-        let system_prompt = Message::new_system(config.system_prompt.clone());
+        let system_prompt = Message::new_system(system_prompt);
 
         self.messages.truncate(0);
         self.tokens_used = 0;

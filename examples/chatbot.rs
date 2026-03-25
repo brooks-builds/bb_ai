@@ -3,29 +3,28 @@ use bb_ai::{
     utilities::{get_user_prompt::get_user_input, print_response_message::print_ai_response},
 };
 use std::env;
-use tokio::sync::mpsc::unbounded_channel;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     dotenvy::dotenv().ok();
 
-    let (user_input_tx, user_input_rx) = unbounded_channel();
-    let (agent_tx, mut agent_rx) = unbounded_channel();
     let system_prompt = "You are a helpful assistant";
     let model = "anthropic/claude-haiku-4.5";
     let api_base_url = "https://openrouter.ai/api/v1";
     let api_key = env::var("LLM_API_KEY")?;
     let tools = vec![];
-    let agent_config = Config {
-        user_input: user_input_rx,
-        response: agent_tx,
-        system_prompt: system_prompt.to_owned(),
-        model: model.to_owned(),
-        api_base_url: api_base_url.to_owned(),
+    let mut agent_config = Config::new(
+        system_prompt,
+        model,
+        api_base_url,
         api_key,
         tools,
-    };
+        vec![],
+        "Simple chatbot that doesn't use any tools, allowing the user to chat with a model directly.",
+    );
+    let user_input_tx = agent_config.user_input_tx.take().unwrap();
+    let mut agent_rx = agent_config.response_rx.take().unwrap();
 
     tokio::spawn(async move {
         bb_ai::run(agent_config).await.ok();

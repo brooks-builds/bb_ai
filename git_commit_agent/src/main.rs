@@ -25,6 +25,10 @@ async fn main() -> eyre::Result<()> {
             GitStatusTool::definition(),
             ReadFileTool::definition(),
         ],
+        user_input_tx: None,
+        response_rx: None,
+        agents: vec![],
+        description: "This agent looks at the code in the git diff, and new code that is written, then creates a commit message.".to_owned(),
     };
 
     spawn(async move {

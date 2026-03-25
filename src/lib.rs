@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod ai_command;
 mod api;
 pub mod config;
@@ -29,7 +30,7 @@ pub async fn run(mut config: Config) -> Result<()> {
                     context.add_message(Message::new_user(prompt), 0, 0.0);
                 }
                 BBAiCommand::ResetContext => {
-                    context.reset(&config);
+                    context.reset(config.system_prompt.clone());
                     config.response.send(AgentResponse {
                         message: None,
                         finished: true,
@@ -112,6 +113,7 @@ pub async fn run(mut config: Config) -> Result<()> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct AgentResponse {
     pub message: Option<String>,
     pub finished: bool,

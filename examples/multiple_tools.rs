@@ -24,6 +24,10 @@ async fn main() -> eyre::Result<()> {
             AppendToFileTool::definition(),
             RandomNumberTool::definition(),
         ],
+        user_input_tx: None,
+        response_rx: None,
+        agents: vec![],
+        description: "Generates random numbers, and then can write them to a file. Shows off how an agent can use multiple tools.".to_owned(),
     };
 
     spawn(async move {
