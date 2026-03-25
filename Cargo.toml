@@ -12,13 +12,16 @@ ignore = "0.4.25"
 rand = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+dotenvy = "0.15.7"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 
 [workspace]
-members = ["troll_code_review"]
+members = ["git_commit_agent","troll_code_review"]
 
 [workspace.dependencies]
 colored = "3.1.1"
-
-[dev-dependencies]
+tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
+color-eyre = "0.6.5"
+eyre = "0.6.12"
 dotenvy = "0.15.7"
+
