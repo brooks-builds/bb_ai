@@ -1,8 +1,7 @@
+use crate::config::Config;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use crate::config::Config;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ChatContext {

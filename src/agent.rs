@@ -7,11 +7,10 @@ pub struct BBAgent {
     chat_context: ChatContext,
     input_rx: UnboundedReceiver<BBAiCommand>,
     system_prompt: String,
-    sub_agent_channels: Vec<SubAgentChannels>,
 }
 
 impl BBAgent {
-    pub fn new(config: Config, sub_agent_channels: Vec<SubAgentChannels>) -> Self {
+    pub fn new(config: Config) -> Self {
         let system_prompt = config.system_prompt.clone();
         let chat_context = ChatContext::new(&config);
         let input_rx = config.user_input;
@@ -20,7 +19,6 @@ impl BBAgent {
             chat_context,
             input_rx,
             system_prompt,
-            sub_agent_channels,
         }
     }
 

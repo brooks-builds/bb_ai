@@ -15,7 +15,7 @@ pub trait BBTool {
     type Arguments;
 
     fn definition() -> Value;
-    fn run(args: &str, id: String) -> Result<Message, Message>;
+    fn run(&mut self, args: &str, id: String) -> Result<Message, Message>;
 }
 
 pub fn run_tools(arguments: &str, id: String, name: &str) -> Result<Message, Message> {

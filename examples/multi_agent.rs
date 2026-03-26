@@ -1,11 +1,15 @@
-use std::env;
-
 use bb_ai::{
     agent::{BBAgent, SubAgentChannels, run_agent},
+    ai_command::BBAiCommand,
     config::Config,
+    context::Message,
     tools::{BBTool, git_diff::GitDiffTool, git_status::GitStatusTool, read_file::ReadFileTool},
 };
+use colored::Colorize;
 use eyre::Result;
+use serde::Deserialize;
+use std::env;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// This will be an agent, with two sub agents. The controller parent agent
 /// will run the first agent to gather the changes of files and summarize what
@@ -48,14 +52,10 @@ async fn main() -> Result<()> {
 
     let diff_agent_input_tx = diff_agent_config.user_input_tx.take().unwrap();
     let diff_agent_response_rx = diff_agent_config.response_rx.take().unwrap();
-    let diff_agent_channels = SubAgentChannels::new(
-        diff_agent_input_tx,
-        diff_agent_response_rx,
-        diff_agent_config.description,
-    );
-    let diff_agent = BBAgent::new(diff_agent_config, vec![]);
+    let diff_agent_tool = DiffAgentTool(diff_agent_input_tx);
+    let diff_agent = BBAgent::new(diff_agent_config);
 
-    let commit_message_agent = BBAgent::new(commit_message_agent_config, vec![]);
+    let commit_message_agent = BBAgent::new(commit_message_agent_config);
 
     let user_input_tx = controller_config.user_input_tx.take().unwrap();
     let mut agent_response_rx = controller_config.response_rx.take().unwrap();
@@ -83,3 +83,47 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+struct DiffAgentTool(UnboundedSender<BBAiCommand>);
+
+impl BBTool for DiffAgentTool {
+    type Arguments = DiffAgentToolArgs;
+
+    fn definition() -> serde_json::Value {
+        serde_json::json!({
+          "type": "function",
+          "function": {
+            "name": "diff_subagent",
+            "description": "diff_subagent is an ai agent that can use tools to summarize new and changed code in the codebase. It's response is the summary.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "description": "The prompt to send to the diff_subagent."
+                }
+              },
+              "required": ["prompt"]
+            }
+          }
+        })
+    }
+
+    fn run(&mut self, args: &str, id: String) -> std::result::Result<Message, Message> {
+        let args = match serde_json::from_str::<Self::Arguments>(args) {
+            Ok(args) => args,
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    format!("Error running diff agent tool: {error}").red()
+                );
+                return Err(Message::new_tool(format!("{error:?}"), id));
+            }
+        };
+
+        todo!()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DiffAgentToolArgs {}

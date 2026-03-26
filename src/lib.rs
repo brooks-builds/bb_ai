@@ -2,7 +2,7 @@ pub mod agent;
 pub mod ai_command;
 mod api;
 pub mod config;
-mod context;
+pub mod context;
 pub mod tools;
 pub mod utilities;
 
