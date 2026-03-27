@@ -1,67 +1,36 @@
-use crate::{AgentResponse, ai_command::BBAiCommand, config::Config, context::ChatContext};
 use colored::Colorize;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use eyre::Context;
+use tokio::{spawn, sync::mpsc::{UnboundedSender, unbounded_channel}, task::JoinHandle};
 
-#[derive(Debug)]
-pub struct BBAgent {
-    chat_context: ChatContext,
-    input_rx: UnboundedReceiver<BBAiCommand>,
-    system_prompt: String,
+pub struct Agent {
+    next: UnboundedSender<String>
 }
 
-impl BBAgent {
-    pub fn new(config: Config) -> Self {
-        let system_prompt = config.system_prompt.clone();
-        let chat_context = ChatContext::new(&config);
-        let input_rx = config.user_input;
+impl Agent {
+    pub fn spawn(next_address: UnboundedSender<String>) -> AgentHandle {
+        let (tx, mut rx) = unbounded_channel::<String>();
 
-        Self {
-            chat_context,
-            input_rx,
-            system_prompt,
-        }
-    }
+        let handle = spawn(async move {
+            let agent = Agent {next: next_address};
 
-    pub async fn run(&mut self) {
-        while let Some(command) = self.input_rx.recv().await {
-            match command {
-                BBAiCommand::Prompt(prompt) => {
-                    dbg!(prompt);
-                }
-                BBAiCommand::ResetContext => {
-                    println!("{}", "Resetting context".blue());
-                    self.chat_context.reset(self.system_prompt.clone());
-                }
+            while let Some(prompt) = rx.recv().await {
+                println!("{}", format!("Received {prompt} in agent.").blue());
+
+                agent.next.send("meow".to_owned()).unwrap();
             }
-        }
-    }
-}
-
-pub async fn run_agent(mut agents: Vec<BBAgent>) {
-    while let Some(mut agent) = agents.pop() {
-        tokio::task::spawn(async move {
-            agent.run().await;
         });
+
+        AgentHandle { tx, handle }
     }
 }
 
-#[derive(Debug)]
-pub struct SubAgentChannels {
-    pub input_tx: UnboundedSender<BBAiCommand>,
-    pub response_rx: UnboundedReceiver<AgentResponse>,
-    pub description: String,
+pub struct AgentHandle {
+    tx: UnboundedSender<String>,
+    handle: JoinHandle<()>,
 }
 
-impl SubAgentChannels {
-    pub fn new(
-        input_tx: UnboundedSender<BBAiCommand>,
-        response_rx: UnboundedReceiver<AgentResponse>,
-        description: String,
-    ) -> Self {
-        Self {
-            input_tx,
-            response_rx,
-            description,
-        }
+impl AgentHandle {
+    pub fn send(&self, prompt: String) -> eyre::Result<()> {
+        self.tx.send(prompt).context("Sending message to agent")
     }
 }
