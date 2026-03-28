@@ -1,9 +1,7 @@
-use std::fmt::Display;
-
 use crate::{AppMessage, llm_sender::spawn_llm_sender};
-use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Display;
 use tokio::{
     spawn,
     sync::mpsc::{UnboundedSender, unbounded_channel},
@@ -15,20 +13,18 @@ pub async fn spawn_agent(
     model: String,
     api_key: String,
     api_base: String,
-    stream: bool,
 ) -> UnboundedSender<AppMessage> {
     let (tx, mut rx) = unbounded_channel();
 
     {
         let tx = tx.clone();
         spawn(async move {
-            println!("{}", "spawning agent actor".red());
             let mut agent = Agent::new(model, system_prompt);
-            let llm_sender = spawn_llm_sender(tx.clone(), &api_key, &api_base, stream).await;
+            let llm_sender = spawn_llm_sender(tx.clone(), &api_key, &api_base).await;
 
             while let Some(message) = rx.recv().await {
                 match message {
-                    AppMessage::AgentIO { content, .. } => {
+                    AppMessage::AgentIn(content) => {
                         agent.add_user_message(content);
 
                         let value = agent.to_value();
@@ -36,30 +32,26 @@ pub async fn spawn_agent(
                         llm_sender.send(AppMessage::LlmSenderIO(value)).unwrap();
                     }
                     AppMessage::LlmSenderIO(value) => {
-                        println!("{}", "receiving value from llm sender actor".red());
-                        if stream {
-                            dbg!(value);
-                        } else {
-                            let response = serde_json::from_value::<LlmResponse>(value).unwrap();
-                            let message = &response.choices[0].message;
-                            let content = format!("{message}");
-                            let cost = response.usage.cost;
-                            let tokens_used = response.usage.total_tokens;
+                        let response = serde_json::from_value::<LlmResponse>(value).unwrap();
+                        let message = response.choices[0].message.as_ref().unwrap();
+                        let content = format!("{message}");
+                        let tokens_used = response
+                            .usage
+                            .as_ref()
+                            .map(|usage| usage.total_tokens)
+                            .unwrap_or_default();
 
-                            agent.context.add_message(message.clone());
-                            agent.cost += cost;
-                            agent.tokens_used += tokens_used;
+                        agent.context.add_message(message.clone());
+                        agent.tokens_used += tokens_used;
 
-                            let app_message = AppMessage::AgentIO {
-                                content,
-                                cost: Some(agent.cost),
-                                tokens_used: Some(agent.tokens_used),
-                            };
+                        let app_message = AppMessage::AgentOut {
+                            content,
+                            finished: true,
+                        };
 
-                            respond_to.send(app_message).unwrap();
-                            
-                        }
+                        respond_to.send(app_message).unwrap();
                     }
+                    _ => unreachable!(),
                 }
             }
         });
@@ -136,7 +128,7 @@ impl Message {
 
 impl Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.role, self.content)
+        write!(f, "{}", self.content)
     }
 }
 
@@ -167,16 +159,23 @@ impl Display for Role {
 #[derive(Debug, Deserialize)]
 pub struct LlmResponse {
     pub choices: Vec<LlmResponseChoice>,
-    pub usage: Usage,
+    pub usage: Option<Usage>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct LlmResponseChoice {
-    pub message: Message,
+    pub message: Option<Message>,
+    pub delta: Option<Message>,
+    pub finish_reason: Option<FinishReason>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Usage {
-    pub cost: f32,
     pub total_tokens: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FinishReason {
+    Stop,
 }

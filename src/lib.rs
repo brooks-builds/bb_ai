@@ -4,10 +4,10 @@ pub mod agent;
 pub mod llm_sender;
 
 pub enum AppMessage {
-    AgentIO {
+    AgentIn(String),
+    AgentOut {
         content: String,
-        cost: Option<f32>,
-        tokens_used: Option<u32>,
+        finished: bool,
     },
     LlmSenderIO(Value),
 }

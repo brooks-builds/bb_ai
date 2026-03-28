@@ -17,45 +17,40 @@ async fn main() -> eyre::Result<()> {
     let model = "anthropic/claude-haiku-4.5";
     let api_key = env::var("LLM_API_KEY")?;
     let api_base = env::var("LLM_BASE_URL")?;
-    let stream = false;
     let agent_tx = spawn_agent(
         tx,
         system_prompt.to_owned(),
         model.to_owned(),
         api_key,
         api_base,
-        stream,
     )
     .await;
-    let context_window = 200_000.0;
 
     loop {
         let prompt = get_user_prompt()?;
 
-        agent_tx.send(AppMessage::AgentIO {
-            content: prompt,
-            cost: None,
-            tokens_used: None,
-        })?;
+        agent_tx.send(AppMessage::AgentIn(prompt))?;
 
-        let Some(response) = rx.recv().await else {
-            break;
-        };
+        loop {
+            let Some(response) = rx.recv().await else {
+                break;
+            };
 
-        match response {
-            AppMessage::AgentIO {
-                content,
-                cost,
-                tokens_used,
-            } => println!(
-                "${} (context: {}%) {content}",
-                cost.unwrap(), (tokens_used.unwrap() as f32 / context_window) * 100.0
-            ),
-            _ => unreachable!(),
+            match response {
+                AppMessage::AgentOut { content, finished } => {
+                    if finished {
+                        println!("{content}");
+                        break;
+                    } else {
+                        print!("{content}");
+                        stdout().flush()?;
+                        continue;
+                    }
+                }
+                _ => unreachable!(),
+            }
         }
     }
-
-    Ok(())
 }
 
 fn get_user_prompt() -> Result<String> {
