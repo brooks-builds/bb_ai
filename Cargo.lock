@@ -122,6 +122,7 @@ dependencies = [
  "colored",
  "dotenvy",
  "eyre",
+ "futures",
  "ignore",
  "rand 0.10.0",
  "serde",

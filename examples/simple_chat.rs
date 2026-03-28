@@ -17,23 +17,25 @@ async fn main() -> eyre::Result<()> {
     let model = "anthropic/claude-haiku-4.5";
     let api_key = env::var("LLM_API_KEY")?;
     let api_base = env::var("LLM_BASE_URL")?;
+    let stream = false;
     let agent_tx = spawn_agent(
         tx,
         system_prompt.to_owned(),
         model.to_owned(),
         api_key,
         api_base,
+        stream,
     )
     .await;
-    let context_window = 200_000;
+    let context_window = 200_000.0;
 
     loop {
         let prompt = get_user_prompt()?;
 
         agent_tx.send(AppMessage::AgentIO {
             content: prompt,
-            cost: 1.0,
-            tokens_used: 0,
+            cost: None,
+            tokens_used: None,
         })?;
 
         let Some(response) = rx.recv().await else {
@@ -46,8 +48,8 @@ async fn main() -> eyre::Result<()> {
                 cost,
                 tokens_used,
             } => println!(
-                "${cost} (context: {}%) {content}",
-                (tokens_used / context_window) * 100
+                "${} (context: {}%) {content}",
+                cost.unwrap(), (tokens_used.unwrap() as f32 / context_window) * 100.0
             ),
             _ => unreachable!(),
         }

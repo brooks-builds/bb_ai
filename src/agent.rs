@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::{AppMessage, llm_sender::spawn_llm_sender};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{
@@ -14,14 +15,16 @@ pub async fn spawn_agent(
     model: String,
     api_key: String,
     api_base: String,
+    stream: bool,
 ) -> UnboundedSender<AppMessage> {
     let (tx, mut rx) = unbounded_channel();
 
     {
         let tx = tx.clone();
         spawn(async move {
+            println!("{}", "spawning agent actor".red());
             let mut agent = Agent::new(model, system_prompt);
-            let llm_sender = spawn_llm_sender(tx.clone(), &api_key, &api_base).await;
+            let llm_sender = spawn_llm_sender(tx.clone(), &api_key, &api_base, stream).await;
 
             while let Some(message) = rx.recv().await {
                 match message {
@@ -33,23 +36,29 @@ pub async fn spawn_agent(
                         llm_sender.send(AppMessage::LlmSenderIO(value)).unwrap();
                     }
                     AppMessage::LlmSenderIO(value) => {
-                        let response = serde_json::from_value::<LlmResponse>(value).unwrap();
-                        let message = &response.choices[0].message;
-                        let content = format!("{message}");
-                        let cost = response.usage.cost;
-                        let tokens_used = response.usage.total_tokens;
+                        println!("{}", "receiving value from llm sender actor".red());
+                        if stream {
+                            dbg!(value);
+                        } else {
+                            let response = serde_json::from_value::<LlmResponse>(value).unwrap();
+                            let message = &response.choices[0].message;
+                            let content = format!("{message}");
+                            let cost = response.usage.cost;
+                            let tokens_used = response.usage.total_tokens;
 
-                        agent.context.add_message(message.clone());
-                        agent.cost += cost;
-                        agent.tokens_used += tokens_used;
+                            agent.context.add_message(message.clone());
+                            agent.cost += cost;
+                            agent.tokens_used += tokens_used;
 
-                        let app_message = AppMessage::AgentIO {
-                            content,
-                            cost: agent.cost,
-                            tokens_used: agent.tokens_used,
-                        };
+                            let app_message = AppMessage::AgentIO {
+                                content,
+                                cost: Some(agent.cost),
+                                tokens_used: Some(agent.tokens_used),
+                            };
 
-                        respond_to.send(app_message).unwrap();
+                            respond_to.send(app_message).unwrap();
+                            
+                        }
                     }
                 }
             }
