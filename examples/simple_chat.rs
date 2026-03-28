@@ -1,7 +1,10 @@
-use bb_ai::agent::Agent;
+use bb_ai::{AppMessage, agent::spawn_agent};
 use dotenvy::dotenv;
 use eyre::Result;
-use std::{env, io::{Write, stdin, stdout}};
+use std::{
+    env,
+    io::{Write, stdin, stdout},
+};
 use tokio::sync::mpsc::unbounded_channel;
 
 #[tokio::main]
@@ -9,26 +12,48 @@ async fn main() -> eyre::Result<()> {
     color_eyre::install()?;
     dotenv()?;
 
-    let (tx, mut rx) = unbounded_channel::<String>();
+    let (tx, mut rx) = unbounded_channel::<AppMessage>();
     let system_prompt = "You are a friendly, helpful chatbot.";
     let model = "anthropic/claude-haiku-4.5";
     let api_key = env::var("LLM_API_KEY")?;
     let api_base = env::var("LLM_BASE_URL")?;
-    let agent_handle = Agent::spawn(tx);
+    let agent_tx = spawn_agent(
+        tx,
+        system_prompt.to_owned(),
+        model.to_owned(),
+        api_key,
+        api_base,
+    )
+    .await;
+    let context_window = 200_000;
 
     loop {
         let prompt = get_user_prompt()?;
 
-        agent_handle.send(prompt)?;
+        agent_tx.send(AppMessage::AgentIO {
+            content: prompt,
+            cost: 1.0,
+            tokens_used: 0,
+        })?;
 
-        loop {
-            let Ok(response) = rx.try_recv() else {
-                break;
-            };
+        let Some(response) = rx.recv().await else {
+            break;
+        };
 
-            println!("AI: {response}");
+        match response {
+            AppMessage::AgentIO {
+                content,
+                cost,
+                tokens_used,
+            } => println!(
+                "${cost} (context: {}%) {content}",
+                (tokens_used / context_window) * 100
+            ),
+            _ => unreachable!(),
         }
     }
+
+    Ok(())
 }
 
 fn get_user_prompt() -> Result<String> {
