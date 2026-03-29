@@ -1,181 +1,95 @@
-use crate::{AppMessage, llm_sender::spawn_llm_sender};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::fmt::Display;
-use tokio::{
-    spawn,
-    sync::mpsc::{UnboundedSender, unbounded_channel},
+use async_openai::types::chat::{
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
 };
+use eyre::{Context, Result};
+use tokio::sync::{mpsc, oneshot};
 
-pub async fn spawn_agent(
-    respond_to: UnboundedSender<AppMessage>,
-    system_prompt: String,
-    model: String,
-    api_key: String,
-    api_base: String,
-) -> UnboundedSender<AppMessage> {
-    let (tx, mut rx) = unbounded_channel();
+use crate::llm_sender::LlmSenderHandle;
 
-    {
-        let tx = tx.clone();
-        spawn(async move {
-            let mut agent = Agent::new(model, system_prompt);
-            let llm_sender = spawn_llm_sender(tx.clone(), &api_key, &api_base).await;
-
-            while let Some(message) = rx.recv().await {
-                match message {
-                    AppMessage::AgentIn(content) => {
-                        agent.add_user_message(content);
-
-                        let value = agent.to_value();
-
-                        llm_sender.send(AppMessage::LlmSenderIO(value)).unwrap();
-                    }
-                    AppMessage::LlmSenderIO(value) => {
-                        let response = serde_json::from_value::<LlmResponse>(value).unwrap();
-                        let message = response.choices[0].message.as_ref().unwrap();
-                        let content = format!("{message}");
-                        let tokens_used = response
-                            .usage
-                            .as_ref()
-                            .map(|usage| usage.total_tokens)
-                            .unwrap_or_default();
-
-                        agent.context.add_message(message.clone());
-                        agent.tokens_used += tokens_used;
-
-                        let app_message = AppMessage::AgentOut {
-                            content,
-                            finished: true,
-                        };
-
-                        respond_to.send(app_message).unwrap();
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        });
-    }
-
-    tx
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct Agent {
-    pub context: Context,
-    #[serde(skip)]
-    pub cost: f32,
-    #[serde(skip)]
-    pub tokens_used: u32,
+    receiver: mpsc::Receiver<AgentMessage>,
+    llm_sender_handle: LlmSenderHandle,
+    messages: Vec<ChatCompletionRequestMessage>,
+    model: String,
 }
 
 impl Agent {
-    pub fn new(model: String, system_prompt: String) -> Self {
-        let messages = vec![Message::new_system(system_prompt)];
-        let context = Context { model, messages };
-        let cost = 0.0;
-        let tokens_used = 0;
+    pub fn new(
+        receiver: mpsc::Receiver<AgentMessage>,
+        llm_sender_handle: LlmSenderHandle,
+        model: String,
+    ) -> Self {
+        let messages = vec![];
 
         Self {
-            context,
-            cost,
-            tokens_used,
+            receiver,
+            llm_sender_handle,
+            messages,
+            model,
         }
     }
 
-    pub fn add_user_message(&mut self, prompt: String) {
-        let message = Message::new_user(prompt);
+    async fn handle_message(&mut self, message: AgentMessage) -> eyre::Result<()> {
+        match message {
+            AgentMessage::SendMessage { respond_to, prompt } => {
+                self.messages.push(ChatCompletionRequestMessage::User(async_openai::types::chat::ChatCompletionRequestUserMessage { content: async_openai::types::chat::ChatCompletionRequestUserMessageContent::Text(prompt), ..Default::default() }));
 
-        self.context.add_message(message);
-    }
+                let response = self
+                    .llm_sender_handle
+                    .send_message(self.messages.clone(), self.model.clone())
+                    .await?;
+                let content = response.choices[0].message.content.clone().unwrap();
+                let message = ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
+                    content: Some(async_openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(content.clone())),
+                    ..Default::default()
+                });
 
-    pub fn to_value(&self) -> Value {
-        serde_json::to_value(&self.context).unwrap()
-    }
-}
+                self.messages.push(message);
+                respond_to.send(content).unwrap();
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Context {
-    pub model: String,
-    pub messages: Vec<Message>,
-}
-
-impl Context {
-    pub fn add_message(&mut self, message: Message) {
-        self.messages.push(message);
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Message {
-    pub role: Role,
-    pub content: String,
-}
-
-impl Message {
-    pub fn new_system(content: String) -> Self {
-        let role = Role::System;
-
-        Self { role, content }
-    }
-
-    pub fn new_user(content: String) -> Self {
-        let role = Role::User;
-
-        Self { role, content }
-    }
-}
-
-impl Display for Message {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.content)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-    System,
-    User,
-    Assistant,
-    Tool,
-}
-
-impl Display for Role {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Role::System => "System",
-                Role::User => "User",
-                Role::Assistant => "Assistant",
-                Role::Tool => "Tool",
+                Ok(())
             }
-        )
+        }
+    }
+
+    async fn run(mut self) -> Result<()> {
+        while let Some(message) = self.receiver.recv().await {
+            self.handle_message(message).await?;
+        }
+
+        Ok(())
     }
 }
 
-#[derive(Debug, Deserialize)]
-pub struct LlmResponse {
-    pub choices: Vec<LlmResponseChoice>,
-    pub usage: Option<Usage>,
+pub enum AgentMessage {
+    SendMessage {
+        respond_to: oneshot::Sender<String>,
+        prompt: String,
+    },
 }
 
-#[derive(Debug, Deserialize)]
-pub struct LlmResponseChoice {
-    pub message: Option<Message>,
-    pub delta: Option<Message>,
-    pub finish_reason: Option<FinishReason>,
+pub struct AgentHandle {
+    sender: mpsc::Sender<AgentMessage>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Usage {
-    pub total_tokens: u32,
-}
+impl AgentHandle {
+    pub fn new(llm_sender_handle: LlmSenderHandle, model: String) -> Self {
+        let (tx, rx) = mpsc::channel(1);
+        let actor = Agent::new(rx, llm_sender_handle, model);
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum FinishReason {
-    Stop,
+        tokio::spawn(actor.run());
+
+        Self { sender: tx }
+    }
+
+    pub async fn send_message(&self, prompt: String) -> Result<String> {
+        let (tx, rx) = oneshot::channel();
+        let message = AgentMessage::SendMessage {
+            respond_to: tx,
+            prompt,
+        };
+        let _ = self.sender.send(message).await;
+
+        rx.await.context("Sending message to agent actor")
+    }
 }

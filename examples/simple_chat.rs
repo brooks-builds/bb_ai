@@ -1,59 +1,27 @@
-use bb_ai::{AppMessage, agent::spawn_agent};
+use std::{env, io::{Write, stdin, stdout}};
+use bb_ai::{agent::AgentHandle, llm_sender::LlmSenderHandle};
 use dotenvy::dotenv;
 use eyre::Result;
-use std::{
-    env,
-    io::{Write, stdin, stdout},
-};
-use tokio::sync::mpsc::unbounded_channel;
 
 #[tokio::main]
-async fn main() -> eyre::Result<()> {
-    color_eyre::install()?;
+async fn main() -> Result<()> {
     dotenv()?;
-
-    let (tx, mut rx) = unbounded_channel::<AppMessage>();
-    let system_prompt = "You are a friendly, helpful chatbot.";
-    let model = "anthropic/claude-haiku-4.5";
-    let api_key = env::var("LLM_API_KEY")?;
+    color_eyre::install()?;
+    
     let api_base = env::var("LLM_BASE_URL")?;
-    let agent_tx = spawn_agent(
-        tx,
-        system_prompt.to_owned(),
-        model.to_owned(),
-        api_key,
-        api_base,
-    )
-    .await;
+    let api_key = env::var("LLM_API_KEY")?;
+    let model = env::var("LLM_MODEL")?;
+    let llm_sender_handle = LlmSenderHandle::new(&api_base, &api_key);
+    let agent_handle = AgentHandle::new(llm_sender_handle, model);
 
     loop {
-        let prompt = get_user_prompt()?;
-
-        agent_tx.send(AppMessage::AgentIn(prompt))?;
-
-        loop {
-            let Some(response) = rx.recv().await else {
-                break;
-            };
-
-            match response {
-                AppMessage::AgentOut { content, finished } => {
-                    if finished {
-                        println!("{content}");
-                        break;
-                    } else {
-                        print!("{content}");
-                        stdout().flush()?;
-                        continue;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
+        let prompt = get_prompt()?;
+        let response = agent_handle.send_message(prompt).await?;
+        println!("{response}");
     }
 }
 
-fn get_user_prompt() -> Result<String> {
+fn get_prompt() -> Result<String> {
     print!("> ");
     stdout().flush()?;
 
