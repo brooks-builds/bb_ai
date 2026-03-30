@@ -1,6 +1,6 @@
 use crate::{
     llm_sender::LlmSenderHandle,
-    tools::{Tool, random_number::RandomNumberHandle},
+    tools::{Tool},
 };
 use async_openai::types::chat::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage, ChatCompletionTools,
@@ -13,7 +13,7 @@ pub struct Agent {
     llm_sender_handle: LlmSenderHandle,
     messages: Vec<ChatCompletionRequestMessage>,
     model: String,
-    tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Box<dyn Tool + Send + 'static>>,
 }
 
 impl Agent {
@@ -21,7 +21,7 @@ impl Agent {
         receiver: mpsc::Receiver<AgentMessage>,
         llm_sender_handle: LlmSenderHandle,
         model: String,
-        tools: Vec<Box<dyn Tool>>,
+        tools: Vec<Box<dyn Tool + Send + 'static>>,
     ) -> Self {
         let messages = vec![];
 
@@ -86,7 +86,7 @@ impl AgentHandle {
     pub fn new(
         llm_sender_handle: LlmSenderHandle,
         model: String,
-        tools: Vec<Box<dyn Tool>>,
+        tools: Vec<Box<dyn Tool + Send + 'static>>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(1);
         let actor = Agent::new(rx, llm_sender_handle, model, tools);

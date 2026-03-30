@@ -1,7 +1,7 @@
 use bb_ai::{
     agent::AgentHandle,
     llm_sender::LlmSenderHandle,
-    tools::random_number::{RandomNumber, RandomNumberHandle},
+    tools::random_number::{RandomNumberHandle},
 };
 use dotenvy::dotenv;
 use eyre::Result;
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let model = env::var("LLM_MODEL")?;
     let random_number_handle = RandomNumberHandle::new();
     let llm_sender_handle = LlmSenderHandle::new(&api_base, &api_key);
-    let tools = vec![];
+    let tools = vec![Box::new(random_number_handle)];
     let agent_handle = AgentHandle::new(llm_sender_handle, model, tools);
 
     loop {
