@@ -1,16 +1,19 @@
+use crate::{
+    llm_sender::LlmSenderHandle,
+    tools::{Tool, random_number::RandomNumberHandle},
+};
 use async_openai::types::chat::{
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage, ChatCompletionTools,
 };
 use eyre::{Context, Result};
 use tokio::sync::{mpsc, oneshot};
-
-use crate::llm_sender::LlmSenderHandle;
 
 pub struct Agent {
     receiver: mpsc::Receiver<AgentMessage>,
     llm_sender_handle: LlmSenderHandle,
     messages: Vec<ChatCompletionRequestMessage>,
     model: String,
+    tools: Vec<Box<dyn Tool>>,
 }
 
 impl Agent {
@@ -18,6 +21,7 @@ impl Agent {
         receiver: mpsc::Receiver<AgentMessage>,
         llm_sender_handle: LlmSenderHandle,
         model: String,
+        tools: Vec<Box<dyn Tool>>,
     ) -> Self {
         let messages = vec![];
 
@@ -26,6 +30,7 @@ impl Agent {
             llm_sender_handle,
             messages,
             model,
+            tools,
         }
     }
 
@@ -34,9 +39,14 @@ impl Agent {
             AgentMessage::SendMessage { respond_to, prompt } => {
                 self.messages.push(ChatCompletionRequestMessage::User(async_openai::types::chat::ChatCompletionRequestUserMessage { content: async_openai::types::chat::ChatCompletionRequestUserMessageContent::Text(prompt), ..Default::default() }));
 
+                let tools = if self.tools.is_empty() {
+                    None
+                } else {
+                    Some(self.tools.iter().map(|tool| tool.definition()).collect())
+                };
                 let response = self
                     .llm_sender_handle
-                    .send_message(self.messages.clone(), self.model.clone())
+                    .send_message(self.messages.clone(), self.model.clone(), tools)
                     .await?;
                 let content = response.choices[0].message.content.clone().unwrap();
                 let message = ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
@@ -73,9 +83,13 @@ pub struct AgentHandle {
 }
 
 impl AgentHandle {
-    pub fn new(llm_sender_handle: LlmSenderHandle, model: String) -> Self {
+    pub fn new(
+        llm_sender_handle: LlmSenderHandle,
+        model: String,
+        tools: Vec<Box<dyn Tool>>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(1);
-        let actor = Agent::new(rx, llm_sender_handle, model);
+        let actor = Agent::new(rx, llm_sender_handle, model, tools);
 
         tokio::spawn(actor.run());
 

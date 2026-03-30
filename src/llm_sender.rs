@@ -1,6 +1,16 @@
-use async_openai::{Client, config::OpenAIConfig, types::chat::{ChatCompletionRequestMessage, CreateChatCompletionResponse}};
+use async_openai::{
+    Client,
+    config::OpenAIConfig,
+    types::chat::{
+        ChatCompletionRequestMessage, ChatCompletionTools,
+        CreateChatCompletionResponse,
+    },
+};
 use eyre::{Context, Result};
-use tokio::sync::{mpsc::{Receiver, Sender, channel}, oneshot};
+use tokio::sync::{
+    mpsc::{Receiver, Sender, channel},
+    oneshot,
+};
 
 pub struct LlmSender {
     receiver: Receiver<LlmSenderMessage>,
@@ -11,10 +21,7 @@ impl LlmSender {
     pub fn new(config: OpenAIConfig, receiver: Receiver<LlmSenderMessage>) -> Self {
         let client = Client::with_config(config);
 
-        Self {
-            receiver,
-            client,
-        }
+        Self { receiver, client }
     }
 
     async fn handle_message(&mut self, message: LlmSenderMessage) -> eyre::Result<()> {
@@ -23,16 +30,18 @@ impl LlmSender {
                 model,
                 messages,
                 respond_to,
+                tools,
             } => {
                 let request = async_openai::types::chat::CreateChatCompletionRequest {
                     messages,
                     model,
+                    tools,
                     ..Default::default()
                 };
                 let response = self.client.chat().create(request).await?;
 
                 respond_to.send(response).unwrap();
-                
+
                 Ok(())
             }
         }
@@ -45,16 +54,15 @@ impl LlmSender {
 
         Ok(())
     }
-
 }
-
 
 pub enum LlmSenderMessage {
     SendMessage {
         respond_to: oneshot::Sender<CreateChatCompletionResponse>,
         model: String,
         messages: Vec<ChatCompletionRequestMessage>,
-    }
+        tools: Option<Vec<ChatCompletionTools>>,
+    },
 }
 
 pub struct LlmSenderHandle {
@@ -64,26 +72,31 @@ pub struct LlmSenderHandle {
 impl LlmSenderHandle {
     pub fn new(api_base: &str, api_key: &str) -> Self {
         let (tx, rx) = channel(8);
-        let config = OpenAIConfig::new().with_api_base(api_base).with_api_key(api_key);
+        let config = OpenAIConfig::new()
+            .with_api_base(api_base)
+            .with_api_key(api_key);
         let actor = LlmSender::new(config, rx);
 
         tokio::spawn(actor.run());
 
-        Self {
-            sender: tx,
-        }
+        Self { sender: tx }
     }
 
-    pub async fn send_message(&self, messages: Vec<ChatCompletionRequestMessage>, model: String) -> Result<CreateChatCompletionResponse> {
+    pub async fn send_message(
+        &self,
+        messages: Vec<ChatCompletionRequestMessage>,
+        model: String,
+        tools: Option<Vec<ChatCompletionTools>>,
+    ) -> Result<CreateChatCompletionResponse> {
         let (tx, rx) = oneshot::channel();
         let message = LlmSenderMessage::SendMessage {
             respond_to: tx,
             model,
             messages,
+            tools,
         };
         let _ = self.sender.send(message).await;
-        
-        rx.await.context("sending message to LlmRequest Actor")
 
+        rx.await.context("sending message to LlmRequest Actor")
     }
 }
