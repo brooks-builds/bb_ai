@@ -1,9 +1,6 @@
-use crate::{
-    llm_sender::LlmSenderHandle,
-    tools::{Tool},
-};
+use crate::{llm_sender::LlmSenderHandle, tools::Tool};
 use async_openai::types::chat::{
-    ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage, ChatCompletionTools,
+    ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage, ChatCompletionResponseMessage
 };
 use eyre::{Context, Result};
 use tokio::sync::{mpsc, oneshot};
@@ -48,14 +45,32 @@ impl Agent {
                     .llm_sender_handle
                     .send_message(self.messages.clone(), self.model.clone(), tools)
                     .await?;
-                let content = response.choices[0].message.content.clone().unwrap();
+                let Some(choice) = response.choices.first() else {
+                    return Ok(());
+                };
+                let ChatCompletionResponseMessage {
+                    content,
+                    refusal: _,
+                    tool_calls,
+                    annotations,
+                    role,
+                    audio,
+                    ..
+                } = &choice.message;
+
+                if let Some(tool_calls) = tool_calls.as_ref() {
+                    self.handle_tool_calls(tool_calls).await?;
+                }
                 let message = ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                    content: Some(async_openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(content.clone())),
+                    content: content.as_ref().map(|content| async_openai::types::chat::ChatCompletionRequestAssistantMessageContent::Text(content.to_owned())),
                     ..Default::default()
                 });
+                let agent_response = AgentResponse {
+                    content: content.as_ref().cloned(),
+                };
 
                 self.messages.push(message);
-                respond_to.send(content).unwrap();
+                respond_to.send(agent_response).unwrap();
 
                 Ok(())
             }
@@ -69,11 +84,31 @@ impl Agent {
 
         Ok(())
     }
+
+    async fn handle_tool_calls(&self, tool_calls: &[ChatCompletionMessageToolCalls]) -> Result<()> {
+        for tool_call in tool_calls {
+            match tool_call {
+                async_openai::types::chat::ChatCompletionMessageToolCalls::Function(chat_completion_message_tool_call) => {
+                    let id = &chat_completion_message_tool_call.id;
+                    let name = &chat_completion_message_tool_call.function.name;
+                    let Some(tool_handle) = self.tools.iter().find(|tool| tool.name() == name) else {
+                        continue;
+                    }
+
+                    let tool_result = tool_handle.
+                },
+                async_openai::types::chat::ChatCompletionMessageToolCalls::Custom(chat_completion_message_custom_tool_call) => unimplemented!(),
+            }
+
+        }
+
+        Ok(())
+    }
 }
 
 pub enum AgentMessage {
     SendMessage {
-        respond_to: oneshot::Sender<String>,
+        respond_to: oneshot::Sender<AgentResponse>,
         prompt: String,
     },
 }
@@ -96,7 +131,7 @@ impl AgentHandle {
         Self { sender: tx }
     }
 
-    pub async fn send_message(&self, prompt: String) -> Result<String> {
+    pub async fn send_message(&self, prompt: String) -> Result<AgentResponse> {
         let (tx, rx) = oneshot::channel();
         let message = AgentMessage::SendMessage {
             respond_to: tx,
@@ -106,4 +141,9 @@ impl AgentHandle {
 
         rx.await.context("Sending message to agent actor")
     }
+}
+
+#[derive(Debug)]
+pub struct AgentResponse {
+    pub content: Option<String>,
 }

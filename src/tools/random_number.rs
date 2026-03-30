@@ -54,18 +54,6 @@ impl RandomNumberHandle {
         Self { sender: tx }
     }
 
-    pub async fn send_to(&self, min: i32, max: i32) -> Result<i32> {
-        let (tx, rx) = oneshot::channel();
-        let message = RandomNumberMessage {
-            respond_to: tx,
-            min,
-            max,
-        };
-
-        self.sender.send(message).await.unwrap();
-
-        rx.await.context("getting random number tool call result")
-    }
 }
 
 impl Default for RandomNumberHandle {
@@ -75,6 +63,8 @@ impl Default for RandomNumberHandle {
 }
 
 impl Tool for RandomNumberHandle {
+    type SendToResult = i32;
+    
     fn definition(&self) -> ChatCompletionTools {
         let description =
             Some("Generate a random integer between min and max (inclusive)".to_owned());
@@ -107,5 +97,18 @@ impl Tool for RandomNumberHandle {
 
     fn name(&self) -> String {
         "random_number".to_owned()
+    }
+
+    async fn send_to(&self, min: i32, max: i32) -> Result<Self::SendToResult> {
+        let (tx, rx) = oneshot::channel();
+        let message = RandomNumberMessage {
+            respond_to: tx,
+            min,
+            max,
+        };
+
+        self.sender.send(message).await.unwrap();
+
+        rx.await.context("getting random number tool call result")
     }
 }
