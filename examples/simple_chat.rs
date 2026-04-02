@@ -1,6 +1,9 @@
 use std::io::{Write, stdin, stdout};
+use bb_ai::{
 
-use bb_ai::agent::AgentHandle;
+    agent::{self},
+    create_actors,
+};
 use dotenvy::dotenv;
 use eyre::Result;
 
@@ -9,7 +12,8 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     dotenv()?;
 
-    let agent_handle = AgentHandle::spawn();
+    let actors = create_actors();
+    let agent_handle = actors.get(agent::NAME).expect("Could not find agent actor");
 
     loop {
         let prompt = get_user_prompt()?;

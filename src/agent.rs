@@ -1,6 +1,8 @@
 use serde::{Serialize};
 use tokio::sync::{mpsc, oneshot};
 
+pub const NAME: &str = "agent";
+
 #[derive(Serialize)]
 struct Agent {
     #[serde(skip)]
