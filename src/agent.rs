@@ -1,7 +1,10 @@
 use async_openai::{Client, config::OpenAIConfig};
 use eyre::{Ok, OptionExt};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
+
+use crate::tools::ToolMessage;
 
 pub const NAME: &str = "agent";
 
@@ -13,10 +16,11 @@ struct Agent {
     client: Client<OpenAIConfig>,
     model: String,
     messages: Vec<LlmMessage>,
+    tools: Vec<Value>,
 }
 
 impl Agent {
-    pub fn new(receiver: mpsc::Receiver<AgentMessage>, api_base: String, api_key: String, model: String) -> Self {
+    pub fn new(receiver: mpsc::Receiver<AgentMessage>, api_base: String, api_key: String, model: String, tools: Vec<Value>) -> Self {
         let config = OpenAIConfig::new().with_api_base(api_base).with_api_key(api_key);
         let client = Client::with_config(config);
         let messages = vec![];
@@ -26,6 +30,7 @@ impl Agent {
             client,
             model,
             messages,
+            tools,
         }
     }
 
@@ -79,7 +84,7 @@ impl AgentHandle {
         }
     }
 
-    pub async fn send(&self, prompt: String) -> eyre::Result<String> {
+    pub async fn send(&self, prompt: String, tool_tx: mpsc::Sender<ToolMessage>) -> eyre::Result<String> {
         let (tx, rx) = oneshot::channel();
         let message = AgentMessage::SendMessage { prompt, respond_to: tx };
 
