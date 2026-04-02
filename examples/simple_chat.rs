@@ -1,23 +1,23 @@
-use std::io::{Write, stdin, stdout};
-use bb_ai::{
-
-    agent::{self},
-    create_actors,
-};
+use bb_ai::agent::AgentHandle;
 use dotenvy::dotenv;
 use eyre::Result;
+use std::{
+    env,
+    io::{Write, stdin, stdout},
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
     dotenv()?;
 
-    let actors = create_actors();
-    let agent_handle = actors.get(agent::NAME).expect("Could not find agent actor");
+    let api_base = env::var("LLM_BASE_URL")?;
+    let api_key = env::var("LLM_API_KEY")?;
+    let model = env::var("LLM_MODEL")?;
+    let agent_handle = AgentHandle::spawn(api_base, api_key, model);
 
     loop {
         let prompt = get_user_prompt()?;
-
         let response = agent_handle.send(prompt).await?;
 
         println!("{response}");
