@@ -16,12 +16,7 @@ dotenvy = "0.15.7"
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
 
 [workspace]
-members = ["git_commit_agent","troll_code_review"]
+members = []
 
 [workspace.dependencies]
-colored = "3.1.1"
-tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
-color-eyre = "0.6.5"
-eyre = "0.6.12"
-dotenvy = "0.15.7"
 
