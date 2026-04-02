@@ -1,8 +1,11 @@
 use eyre::{Context, Result};
 use rand::random_range;
 use serde::Deserialize;
-use serde_json::Value;
-use tokio::{spawn, sync::{mpsc, oneshot}};
+use serde_json::{Value, json};
+use tokio::{
+    spawn,
+    sync::{mpsc, oneshot},
+};
 
 struct RandomNumber {
     receiver: mpsc::Receiver<RandomNumberMessage>,
@@ -10,12 +13,10 @@ struct RandomNumber {
 
 impl RandomNumber {
     pub fn new(receiver: mpsc::Receiver<RandomNumberMessage>) -> Self {
-        Self {
-            receiver
-        }
+        Self { receiver }
     }
 
-    async fn run(mut self)  {
+    async fn run(mut self) {
         while let Some(message) = self.receiver.recv().await {
             let result = random_range(message.min..=message.max);
 
@@ -41,14 +42,12 @@ impl RandomNumberHandle {
 
         spawn(random_number.run());
 
-        Self {
-            sender: tx,
-        }
+        Self { sender: tx }
     }
 
-    pub async fn send(&self, args: Value) -> Result<String> {
+    pub async fn send(&self, args: &str) -> Result<String> {
         let (tx, rx) = oneshot::channel();
-        let args = serde_json::from_value::<RandomNumberArgs>(args)?;
+        let args = serde_json::from_str::<RandomNumberArgs>(args)?;
         let message = RandomNumberMessage {
             respond_to: tx,
             min: args.min,
@@ -58,6 +57,30 @@ impl RandomNumberHandle {
         self.sender.send(message).await?;
 
         rx.await.context("Getting random number result")
+    }
+
+    pub fn definition(&self) -> Value {
+        json!({
+            "type": "function",
+            "function": {
+                "name": "random_number",
+                "description": "generate a random interger between min and max (inclusive)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min": {
+                            "type": "number",
+                            "description": "Lowest integer in the range of possible numbers."
+                        },
+                        "max": {
+                            "type": "number",
+                            "description": "Largest possible integer in the range of possible numbers, this is inclusive to the range."
+                        }
+                    },
+                    "required": ["min", "max"]
+                }
+            }
+        })
     }
 }
 

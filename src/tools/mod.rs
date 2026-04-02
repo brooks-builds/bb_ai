@@ -1,9 +1,10 @@
 pub mod random_number;
 
-use serde_json::Value;
+use tokio::sync::oneshot;
 
+#[derive(Debug)]
 pub struct ToolMessage {
-    id: String,
-    name: String,
-    arguments: Value,
+    pub name: String,
+    pub arguments: String,
+    pub send_to: oneshot::Sender<String>,
 }

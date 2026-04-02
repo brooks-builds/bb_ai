@@ -14,7 +14,8 @@ async fn main() -> Result<()> {
     let api_base = env::var("LLM_BASE_URL")?;
     let api_key = env::var("LLM_API_KEY")?;
     let model = env::var("LLM_MODEL")?;
-    let agent_handle = AgentHandle::spawn(api_base, api_key, model);
+    let tools = vec![];
+    let agent_handle = AgentHandle::spawn(api_base, api_key, model, None, tools);
 
     loop {
         let prompt = get_user_prompt()?;

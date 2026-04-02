@@ -1,10 +1,9 @@
+use crate::tools::ToolMessage;
 use async_openai::{Client, config::OpenAIConfig};
-use eyre::{Ok, OptionExt};
+use eyre::{Ok, OptionExt, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
-
-use crate::tools::ToolMessage;
 
 pub const NAME: &str = "agent";
 
@@ -16,20 +15,32 @@ struct Agent {
     client: Client<OpenAIConfig>,
     model: String,
     messages: Vec<LlmMessage>,
+    #[serde(skip)]
+    tool_tx: Option<mpsc::Sender<ToolMessage>>,
     tools: Vec<Value>,
 }
 
 impl Agent {
-    pub fn new(receiver: mpsc::Receiver<AgentMessage>, api_base: String, api_key: String, model: String, tools: Vec<Value>) -> Self {
-        let config = OpenAIConfig::new().with_api_base(api_base).with_api_key(api_key);
+    pub fn new(
+        receiver: mpsc::Receiver<AgentMessage>,
+        api_base: String,
+        api_key: String,
+        model: String,
+        tool_tx: Option<mpsc::Sender<ToolMessage>>,
+        tools: Vec<Value>,
+    ) -> Self {
+        let config = OpenAIConfig::new()
+            .with_api_base(api_base)
+            .with_api_key(api_key);
         let client = Client::with_config(config);
         let messages = vec![];
-        
+
         Self {
             receiver,
             client,
             model,
             messages,
+            tool_tx,
             tools,
         }
     }
@@ -37,26 +48,65 @@ impl Agent {
     pub async fn run(mut self) -> eyre::Result<()> {
         while let Some(message) = self.receiver.recv().await {
             match message {
-                AgentMessage::SendMessage { prompt, respond_to } => self.handle_send_message(prompt, respond_to).await?,
+                AgentMessage::SendMessage { prompt, respond_to } => {
+                    self.handle_send_message(prompt, respond_to).await?
+                }
             }
         }
 
         Ok(())
     }
 
-    pub async fn handle_send_message(&mut self, prompt: String, respond_to: oneshot::Sender<String>) -> eyre::Result<()> {
+    pub async fn handle_send_message(
+        &mut self,
+        prompt: String,
+        respond_to: oneshot::Sender<String>,
+    ) -> eyre::Result<()> {
         let user_message = LlmMessage::new_user(prompt);
 
         self.messages.push(user_message);
+        self.send_to_ai().await?;
 
+        while let Some(message) = self.messages.last_mut()
+            && let Some(tool_calls) = message.tool_calls.as_ref()
+            && let Some(tool_tx) = self.tool_tx.as_ref()
+        {
+            for tool_call in tool_calls.clone() {
+                let name = tool_call.function.name.clone();
+                let arguments = tool_call.function.arguments.clone();
+                let (tool_call_tx, tool_call_rx) = oneshot::channel();
+                let tool_message = ToolMessage {
+                    name,
+                    arguments,
+                    send_to: tool_call_tx,
+                };
+
+                tool_tx.clone().send(tool_message).await?;
+                let tool_call_result = tool_call_rx.await?;
+                let tool_message = LlmMessage::new_tool(tool_call_result, tool_call.id.clone());
+
+                self.messages.push(tool_message);
+            }
+
+            self.send_to_ai().await?;
+        }
+
+        let message = self.messages.last().ok_or_eyre("No messages exist")?;
+        if let Some(content) = message.content.as_ref() {
+            respond_to.send(content.clone()).unwrap();
+        }
+
+        Ok(())
+    }
+
+    async fn send_to_ai(&mut self) -> Result<()> {
         let mut response: LlmResponse = self.client.chat().create_byot(&self).await?;
-        let choice = response.choices.first_mut().ok_or_eyre("choice missing from llm response")?;
+        let choice = response
+            .choices
+            .first_mut()
+            .ok_or_eyre("choice missing from llm response")?;
 
         self.messages.push(choice.message.clone());
-
-        if let Some(content) = choice.message.content.take() {
-            respond_to.send(content).unwrap();
-        }
 
         Ok(())
     }
@@ -66,7 +116,7 @@ enum AgentMessage {
     SendMessage {
         prompt: String,
         respond_to: oneshot::Sender<String>,
-    }
+    },
 }
 
 pub struct AgentHandle {
@@ -74,19 +124,26 @@ pub struct AgentHandle {
 }
 
 impl AgentHandle {
-    pub fn spawn(api_base: String, api_key: String, model: String) -> Self {
+    pub fn spawn(
+        api_base: String,
+        api_key: String,
+        model: String,
+        tool_tx: Option<mpsc::Sender<ToolMessage>>,
+        tools: Vec<Value>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(1);
-        let agent = Agent::new(rx, api_base, api_key, model);
+        let agent = Agent::new(rx, api_base, api_key, model, tool_tx, tools);
         let _handle = tokio::spawn(agent.run());
 
-        Self {
-            sender: tx
-        }
+        Self { sender: tx }
     }
 
-    pub async fn send(&self, prompt: String, tool_tx: mpsc::Sender<ToolMessage>) -> eyre::Result<String> {
+    pub async fn send(&self, prompt: String) -> eyre::Result<String> {
         let (tx, rx) = oneshot::channel();
-        let message = AgentMessage::SendMessage { prompt, respond_to: tx };
+        let message = AgentMessage::SendMessage {
+            prompt,
+            respond_to: tx,
+        };
 
         self.sender.send(message).await?;
 
@@ -100,15 +157,31 @@ impl AgentHandle {
 struct LlmMessage {
     role: LlmMessageRole,
     content: Option<String>,
+    tool_calls: Option<Vec<LlmResponseToolCall>>,
+    tool_call_id: Option<String>,
 }
 
 impl LlmMessage {
     pub fn new_user(content: String) -> Self {
         let role = LlmMessageRole::User;
+        let tool_calls = None;
 
         Self {
             role,
             content: Some(content),
+            tool_calls,
+            tool_call_id: None,
+        }
+    }
+
+    pub fn new_tool(content: String, id: String) -> Self {
+        let role = LlmMessageRole::Tool;
+
+        Self {
+            role,
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: Some(id),
         }
     }
 }
@@ -129,5 +202,19 @@ struct LlmResponse {
 
 #[derive(Deserialize)]
 struct LlmMessageResponseChoice {
-    message: LlmMessage
+    message: LlmMessage,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct LlmResponseToolCall {
+    #[serde(rename = "type")]
+    tool_type: String,
+    id: String,
+    function: LlmResponseToolCallFunction,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct LlmResponseToolCallFunction {
+    name: String,
+    arguments: String,
 }
