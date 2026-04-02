@@ -1,10 +1,10 @@
 use bb_ai::{
-    agent::AgentHandle,
+    agent::{AgentHandle, AgentResponse},
     tools::{ToolMessage, random_number::RandomNumberHandle},
 };
 use colored::Colorize;
 use dotenvy::dotenv;
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use std::{
     env,
     io::{Write, stdin, stdout},
@@ -28,9 +28,25 @@ async fn main() -> Result<()> {
 
     loop {
         let prompt = get_user_prompt()?;
-        let response = agent_handle.send(prompt).await?;
 
-        println!("{response}");
+        if prompt.is_empty() {
+            continue;
+        }
+
+        let mut response_rx = agent_handle.send(prompt).await?;
+
+        loop {
+            let AgentResponse { content, finished } = response_rx
+                .recv()
+                .await
+                .ok_or_eyre("no agent response from agent handle send channel")?;
+
+            println!("{content}");
+
+            if finished {
+                break;
+            }
+        }
     }
 }
 

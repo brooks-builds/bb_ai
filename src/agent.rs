@@ -1,6 +1,6 @@
 use crate::tools::ToolMessage;
 use async_openai::{Client, config::OpenAIConfig};
-use eyre::{Ok, OptionExt, Result};
+use eyre::{Context, Ok, OptionExt, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
@@ -60,17 +60,19 @@ impl Agent {
     pub async fn handle_send_message(
         &mut self,
         prompt: String,
-        respond_to: oneshot::Sender<String>,
+        respond_to: mpsc::Sender<AgentResponse>,
     ) -> eyre::Result<()> {
         let user_message = LlmMessage::new_user(prompt);
 
         self.messages.push(user_message);
         self.send_to_ai().await?;
 
-        while let Some(message) = self.messages.last_mut()
+        while let Some(message) = self.messages.last_mut().cloned()
             && let Some(tool_calls) = message.tool_calls.as_ref()
             && let Some(tool_tx) = self.tool_tx.as_ref()
         {
+            self.respond(&message, respond_to.clone(), false).await?;
+
             for tool_call in tool_calls.clone() {
                 let name = tool_call.function.name.clone();
                 let arguments = tool_call.function.arguments.clone();
@@ -82,6 +84,7 @@ impl Agent {
                 };
 
                 tool_tx.clone().send(tool_message).await?;
+
                 let tool_call_result = tool_call_rx.await?;
                 let tool_message = LlmMessage::new_tool(tool_call_result, tool_call.id.clone());
 
@@ -92,9 +95,7 @@ impl Agent {
         }
 
         let message = self.messages.last().ok_or_eyre("No messages exist")?;
-        if let Some(content) = message.content.as_ref() {
-            respond_to.send(content.clone()).unwrap();
-        }
+        self.respond(message, respond_to, true).await?;
 
         Ok(())
     }
@@ -110,12 +111,28 @@ impl Agent {
 
         Ok(())
     }
+
+    async fn respond(
+        &self,
+        message: &LlmMessage,
+        tx: mpsc::Sender<AgentResponse>,
+        finished: bool,
+    ) -> Result<()> {
+        let Some(content) = message.content.as_ref().cloned() else {
+            return Ok(());
+        };
+        let message = AgentResponse { content, finished };
+
+        tx.send(message).await.context("sending agent response")?;
+
+        Ok(())
+    }
 }
 
 enum AgentMessage {
     SendMessage {
         prompt: String,
-        respond_to: oneshot::Sender<String>,
+        respond_to: mpsc::Sender<AgentResponse>,
     },
 }
 
@@ -138,8 +155,8 @@ impl AgentHandle {
         Self { sender: tx }
     }
 
-    pub async fn send(&self, prompt: String) -> eyre::Result<String> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn send(&self, prompt: String) -> eyre::Result<mpsc::Receiver<AgentResponse>> {
+        let (tx, rx) = mpsc::channel(10);
         let message = AgentMessage::SendMessage {
             prompt,
             respond_to: tx,
@@ -147,9 +164,7 @@ impl AgentHandle {
 
         self.sender.send(message).await?;
 
-        let response = rx.await?;
-
-        Ok(response)
+        Ok(rx)
     }
 }
 
@@ -217,4 +232,9 @@ struct LlmResponseToolCall {
 struct LlmResponseToolCallFunction {
     name: String,
     arguments: String,
+}
+
+pub struct AgentResponse {
+    pub content: String,
+    pub finished: bool,
 }

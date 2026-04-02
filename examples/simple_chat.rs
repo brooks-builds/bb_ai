@@ -1,6 +1,6 @@
-use bb_ai::agent::AgentHandle;
+use bb_ai::agent::{AgentHandle, AgentResponse};
 use dotenvy::dotenv;
-use eyre::Result;
+use eyre::{OptionExt, Result};
 use std::{
     env,
     io::{Write, stdin, stdout},
@@ -19,9 +19,12 @@ async fn main() -> Result<()> {
 
     loop {
         let prompt = get_user_prompt()?;
-        let response = agent_handle.send(prompt).await?;
+        let mut response = agent_handle.send(prompt).await?;
 
-        println!("{response}");
+        let AgentResponse { content, .. } =
+            response.recv().await.ok_or_eyre("Getting agent response")?;
+
+        println!("{content}");
     }
 }
 
