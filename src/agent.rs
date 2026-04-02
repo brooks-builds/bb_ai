@@ -1,5 +1,5 @@
 use async_openai::{Client, config::OpenAIConfig};
-use eyre::OptionExt;
+use eyre::{Ok, OptionExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
@@ -46,9 +46,11 @@ impl Agent {
 
         let mut response: LlmResponse = self.client.chat().create_byot(&self).await?;
         let choice = response.choices.first_mut().ok_or_eyre("choice missing from llm response")?;
-        
+
+        self.messages.push(choice.message.clone());
+
         if let Some(content) = choice.message.content.take() {
-            respond_to.send(content).expect("Agent responding");
+            respond_to.send(content).unwrap();
         }
 
         Ok(())
@@ -89,7 +91,7 @@ impl AgentHandle {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct LlmMessage {
     role: LlmMessageRole,
     content: Option<String>,
@@ -106,7 +108,7 @@ impl LlmMessage {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 enum LlmMessageRole {
     System,
