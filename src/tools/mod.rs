@@ -2,6 +2,7 @@ pub mod git_diff;
 pub mod git_status;
 pub mod random_number;
 pub mod read_file;
+pub mod spawn_agent;
 
 use tokio::sync::oneshot;
 

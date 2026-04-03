@@ -35,13 +35,14 @@ enum GitStatusMessage {
     Run { respond_to: oneshot::Sender<String> },
 }
 
+#[derive(Debug, Clone)]
 pub struct GitStatusHandle {
     sender: mpsc::Sender<GitStatusMessage>,
 }
 
 impl GitStatusHandle {
     pub fn spawn() -> Result<Self> {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(8);
         let git_status = GitStatus { receiver: rx };
 
         spawn(git_status.run());

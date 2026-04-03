@@ -156,7 +156,7 @@ impl AgentHandle {
         tools: Vec<Value>,
         system_prompt: String,
     ) -> Self {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(8);
         let agent = Agent::new(rx, api_base, api_key, model, tool_tx, tools, system_prompt);
         let _handle = tokio::spawn(agent.run());
 

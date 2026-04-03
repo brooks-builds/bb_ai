@@ -35,6 +35,7 @@ struct GitDiffMessage {
     respond_to: oneshot::Sender<String>,
 }
 
+#[derive(Debug, Clone)]
 pub struct GitDiffHandle {
     sender: mpsc::Sender<GitDiffMessage>,
 }

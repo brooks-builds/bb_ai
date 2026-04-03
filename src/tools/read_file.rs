@@ -71,6 +71,7 @@ struct ReadFileMessage {
     path: PathBuf,
 }
 
+#[derive(Debug, Clone)]
 pub struct ReadFileHandle {
     sender: mpsc::Sender<ReadFileMessage>,
 }
