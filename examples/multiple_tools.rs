@@ -23,7 +23,22 @@ async fn main() -> Result<()> {
     let git_diff_tool = GitDiffHandle::spawn()?;
     let git_status_tool = GitStatusHandle::spawn()?;
     let tools = vec![git_diff_tool.definition(), git_status_tool.definition()];
-    let agent_handle = AgentHandle::spawn(api_base, api_key, model, Some(tool_tx), tools);
+    let system_prompt = r#"You are a precise tool-calling assistant with access to git tools. Follow these rules strictly:
+
+1. When given a task, consider ALL available tools and determine which combination gives the most complete answer.
+2. For questions about repository changes, use BOTH git status (to see which files are affected and their staging state) AND git diff (to see the actual content changes). Neither alone gives the full picture.
+3. After each tool response, evaluate whether you have enough information to fully answer the user's question. If not, call additional tools before responding.
+4. When the task's goal IS fully met, stop calling tools and respond with a clear summary.
+5. Never call a tool after you have all the information needed.
+6. Always report the final result clearly."#.to_owned();
+    let agent_handle = AgentHandle::spawn(
+        api_base,
+        api_key,
+        model,
+        Some(tool_tx),
+        tools,
+        system_prompt,
+    );
 
     spawn(handle_tool_calls(tool_rx, git_diff_tool, git_status_tool));
 

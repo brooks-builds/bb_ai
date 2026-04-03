@@ -15,7 +15,8 @@ async fn main() -> Result<()> {
     let api_key = env::var("LLM_API_KEY")?;
     let model = env::var("LLM_MODEL")?;
     let tools = vec![];
-    let agent_handle = AgentHandle::spawn(api_base, api_key, model, None, tools);
+    let system_prompt = "you are a friendly, helpful chatbot.".to_owned();
+    let agent_handle = AgentHandle::spawn(api_base, api_key, model, None, tools, system_prompt);
 
     loop {
         let prompt = get_user_prompt()?;

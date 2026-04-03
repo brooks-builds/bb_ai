@@ -28,12 +28,13 @@ impl Agent {
         model: String,
         tool_tx: Option<mpsc::Sender<ToolMessage>>,
         tools: Vec<Value>,
+        system_prompt: String,
     ) -> Self {
         let config = OpenAIConfig::new()
             .with_api_base(api_base)
             .with_api_key(api_key);
         let client = Client::with_config(config);
-        let messages = vec![];
+        let messages = vec![LlmMessage::new_system(system_prompt)];
 
         Self {
             receiver,
@@ -70,6 +71,7 @@ impl Agent {
         while let Some(message) = self.messages.last_mut().cloned()
             && let Some(tool_calls) = message.tool_calls.as_ref()
             && let Some(tool_tx) = self.tool_tx.as_ref()
+            && !tool_calls.is_empty()
         {
             self.respond(&message, respond_to.clone(), false).await?;
 
@@ -121,6 +123,11 @@ impl Agent {
         let Some(content) = message.content.as_ref().cloned() else {
             return Ok(());
         };
+
+        if content.is_empty() {
+            return Ok(());
+        }
+
         let message = AgentResponse { content, finished };
 
         tx.send(message).await.context("sending agent response")?;
@@ -147,9 +154,10 @@ impl AgentHandle {
         model: String,
         tool_tx: Option<mpsc::Sender<ToolMessage>>,
         tools: Vec<Value>,
+        system_prompt: String,
     ) -> Self {
         let (tx, rx) = mpsc::channel(1);
-        let agent = Agent::new(rx, api_base, api_key, model, tool_tx, tools);
+        let agent = Agent::new(rx, api_base, api_key, model, tool_tx, tools, system_prompt);
         let _handle = tokio::spawn(agent.run());
 
         Self { sender: tx }
@@ -197,6 +205,17 @@ impl LlmMessage {
             content: Some(content),
             tool_calls: None,
             tool_call_id: Some(id),
+        }
+    }
+
+    pub fn new_system(content: String) -> Self {
+        let role = LlmMessageRole::System;
+
+        Self {
+            role,
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: None,
         }
     }
 }

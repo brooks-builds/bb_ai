@@ -22,7 +22,8 @@ async fn main() -> Result<()> {
     let (tool_tx, tool_rx) = mpsc::channel(10);
     let random_number_tool = RandomNumberHandle::spawn();
     let tools = vec![random_number_tool.definition()];
-    let agent_handle = AgentHandle::spawn(api_base, api_key, model, Some(tool_tx), tools);
+    let system_prompt = "You are a precise tool-calling assistant. Follow these rules strictly:\n1. When given a task that requires tool calls, use the provided tools to accomplish it.\n2. After each tool response, evaluate whether the task'\''s goal has been met.\n3. If the goal IS met, immediately stop calling tools and respond to the user with a summary of what happened.\n4. If the goal is NOT yet met, make exactly one more tool call and re-evaluate.\n5. Never call a tool after the goal has been satisfied.\n6. Always report the final result clearly.".to_owned();
+    let agent_handle = AgentHandle::spawn(api_base, api_key, model, Some(tool_tx), tools, system_prompt);
 
     spawn(handle_tool_calls(tool_rx, random_number_tool));
 
