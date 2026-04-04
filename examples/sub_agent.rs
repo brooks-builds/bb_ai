@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
         tool_tx.clone(),
     ));
 
-    let prompt = "Please create a git commit message using sub agents to help out so your context remains as clean as possible. Make sure the sub agents have access to the tools they need to see what the changes are, but also see what untracked files exist (and their contents) as they are also part of the commit message. Only respond with a single sentence commit message. Please make the message as clickbaity as possible. You are allowed to break this out into as many sub agents as needed. After responding with the sub agent, write short report on how the work got completed so the user knows what sub agents were created, what tools they had access to, and who did what. As a controller ai, you don't do the work yourself, but delegate all work to sub agents, no matter how small.".to_owned();
+    let prompt = "Please create a git commit message using sub agents to help out so your context remains as clean as possible. Make sure the sub agents have access to the tools they need to see what the changes are, but also see what untracked files exist (and their contents) as they are also part of the commit message. Only respond with a single sentence commit message. Please make the message as clickbaity as possible. You are allowed to break this out into as many sub agents as needed.".to_owned();
     let mut response_rx = agent_handle.send(prompt).await?;
 
     loop {

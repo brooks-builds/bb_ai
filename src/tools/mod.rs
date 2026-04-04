@@ -4,6 +4,7 @@ pub mod random_number;
 pub mod read_file;
 pub mod spawn_agent;
 pub mod list_files;
+pub mod say;
 
 use tokio::sync::oneshot;
 

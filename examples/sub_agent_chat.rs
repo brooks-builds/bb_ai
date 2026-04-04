@@ -1,8 +1,7 @@
 use bb_ai::{
     agent::{AgentHandle, AgentResponse},
     tools::{
-        ToolMessage, git_diff::GitDiffHandle, git_status::GitStatusHandle,
-        list_files::ListFileHandle, read_file::ReadFileHandle, spawn_agent::SpawnAgentHandle,
+        ToolMessage, git_diff::GitDiffHandle, git_status::GitStatusHandle, list_files::ListFileHandle, read_file::ReadFileHandle, say::SayHandle, spawn_agent::SpawnAgentHandle
     },
 };
 use colored::Colorize;
@@ -28,29 +27,34 @@ async fn main() -> Result<()> {
     let read_file_tool = ReadFileHandle::spawn()?;
     let spawn_agent_tool = SpawnAgentHandle::spawn()?;
     let list_files_tool = ListFileHandle::spawn()?;
+    let say_tool = SayHandle::spawn()?;
     let tools = vec![
         git_diff_tool.definition(),
         git_status_tool.definition(),
         read_file_tool.definition(),
         spawn_agent_tool.definition(),
         list_files_tool.definition(),
+        say_tool.definition(),
     ];
     let mut system_prompt = r#"You are a Agent controller who has a full list of tools available to you.
 
-Your primary strategy is to delegate work to specialized sub agents. This keeps your context window clean and allows you to provide better answers. When faced with a task:
+Your only strategy is to delegate all work to specialized sub agents. This keeps your context window clean and allows you to provide better answers. When faced with a task:
 
 1. Break down complex requests into focused sub-tasks
-2. Create specialized sub agents for each focused task (finding files, reading code, analyzing, etc.)
+2. Create specialized sub agents for each task (finding files, reading code, analyzing, etc.)
 3. Summarize and synthesize the sub agent results for the user
 4. Keep your own responses brief and high-level
 
 You answer correctly and truthfully, keeping your responses short but accurate.
 
-Remember: Delegation is your strength, not a limitation. More agents = better results."#.to_owned();
+Remember: Delegation is your strength, not a limitation. More agents = better results.
+
+If the agents (or yourself) need to speek out loud then pass the say tool to them and tell them what voice to use and ensure that each sub agent has a different voice."#.to_owned();
 
     system_prompt.push_str(&read_file_tool.system_prompt());
     system_prompt.push_str(&spawn_agent_tool.system_prompt());
     system_prompt.push_str(&list_files_tool.system_prompt());
+    system_prompt.push_str(&say_tool.system_prompt());
 
     let agent_handle = AgentHandle::spawn(
         api_base,
@@ -69,6 +73,7 @@ Remember: Delegation is your strength, not a limitation. More agents = better re
         spawn_agent_tool,
         tool_tx.clone(),
         list_files_tool,
+        say_tool,
     ));
 
     loop {
@@ -98,6 +103,7 @@ async fn handle_tool_calls(
     spawn_agent: SpawnAgentHandle,
     tool_tx: mpsc::Sender<ToolMessage>,
     list_files: ListFileHandle,
+    say_tool: SayHandle,
 ) -> Result<()> {
     while let Some(message) = rx.recv().await {
         if message.name.as_str() == "git_diff" {
@@ -168,7 +174,10 @@ async fn handle_tool_calls(
                 } else if tool_name == list_files.name() {
                     tools.push(list_files.definition());
                     system_prompt.push(list_files.system_prompt());
-                }
+                } else if tool_name == say_tool.name() {
+                    tools.push(say_tool.definition());
+                    system_prompt.push(say_tool.system_prompt());
+                } 
             }
 
             spawn(async move {
@@ -200,6 +209,14 @@ async fn handle_tool_calls(
             spawn(async move {
                 println!("{}", "Running list files".green());
                 let result = list_files.send(&message.arguments).await.unwrap();
+                message.send_to.send(result).unwrap();
+            });
+        } else if message.name == say_tool.name() {
+            let say= say_tool.clone();
+
+            spawn(async move {
+                println!("{}", format!("speaking {} out loud", message.arguments).green());
+                let result = say.send(&message.arguments).await.unwrap();
                 message.send_to.send(result).unwrap();
             });
         }
