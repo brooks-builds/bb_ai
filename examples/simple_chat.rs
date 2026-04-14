@@ -9,7 +9,7 @@ use std::{
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install()?;
-    dotenv()?;
+    dotenv().ok();
 
     let api_base = env::var("LLM_BASE_URL")?;
     let api_key = env::var("LLM_API_KEY")?;

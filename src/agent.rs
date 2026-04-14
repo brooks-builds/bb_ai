@@ -1,13 +1,13 @@
 use crate::tools::ToolMessage;
 use async_openai::{Client, config::OpenAIConfig};
-use eyre::{Context, Ok, OptionExt, Result};
+use eyre::{Context, OptionExt, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 
 pub const NAME: &str = "agent";
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Agent {
     #[serde(skip)]
     receiver: mpsc::Receiver<AgentMessage>,
@@ -103,7 +103,13 @@ impl Agent {
     }
 
     async fn send_to_ai(&mut self) -> Result<()> {
-        let mut response: LlmResponse = self.client.chat().create_byot(&self).await?;
+        let mut response: LlmResponse = match self.client.chat().create_byot(&self).await {
+            Ok(response) => response,
+            Err(error) => {
+                eprintln!("Got error sending request to LLM: {error:?}");
+                return Err(error.into());
+            }
+        };
         let choice = response
             .choices
             .first_mut()
@@ -136,6 +142,7 @@ impl Agent {
     }
 }
 
+#[derive(Debug)]
 enum AgentMessage {
     SendMessage {
         prompt: String,
@@ -170,13 +177,13 @@ impl AgentHandle {
             respond_to: tx,
         };
 
-        self.sender.send(message).await?;
+        self.sender.send(message).await.context("Sending request to agent")?;
 
         Ok(rx)
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct LlmMessage {
     role: LlmMessageRole,
     content: Option<String>,
@@ -220,7 +227,7 @@ impl LlmMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 enum LlmMessageRole {
     System,
@@ -229,12 +236,12 @@ enum LlmMessageRole {
     Tool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct LlmResponse {
     pub choices: Vec<LlmMessageResponseChoice>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct LlmMessageResponseChoice {
     message: LlmMessage,
 }
@@ -253,6 +260,7 @@ struct LlmResponseToolCallFunction {
     arguments: String,
 }
 
+#[derive(Debug)]
 pub struct AgentResponse {
     pub content: String,
     pub finished: bool,
